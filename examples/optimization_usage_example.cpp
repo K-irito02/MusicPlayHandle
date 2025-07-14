@@ -2,8 +2,8 @@
  * @file optimization_usage_example.cpp
  * @brief 代码优化使用示例
  * @details 展示如何在实际项目中应用各种优化技术
- * @author QT6/C++11 专家
- * @date 2024
+ * @author QT6/C++17 专家
+ * @date 2025
  */
 
 #include "../src/core/servicecontainer.h"
