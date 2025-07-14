@@ -1,0 +1,764 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1200</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>音乐播放器</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="icon.qrc">
+    <normaloff>:/new/prefix1/images/applicationIcon.png</normaloff>:/new/prefix1/images/applicationIcon.png</iconset>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QMainWindow {
+    background-color: #2b2b2b;
+    color: #ffffff;
+}
+
+QToolBar {
+    background-color: #3c3c3c;
+    border: none;
+    spacing: 5px;
+    padding: 5px;
+}
+
+QToolBar QPushButton {
+    background-color: #4a4a4a;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 8px;
+    min-width: 80px;
+    color: #ffffff;
+}
+
+QToolBar QPushButton:hover {
+    background-color: #5a5a5a;
+}
+
+QToolBar QPushButton:pressed {
+    background-color: #666666;
+}
+
+QSplitter::handle {
+    background-color: #555555;
+    width: 2px;
+    height: 2px;
+}
+
+QListWidget {
+    background-color: #3c3c3c;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 5px;
+    color: #ffffff;
+}
+
+QListWidget::item {
+    padding: 8px;
+    border-bottom: 1px solid #555555;
+}
+
+QListWidget::item:selected {
+    background-color: #0078d4;
+    color: #ffffff;
+}
+
+QListWidget::item:hover {
+    background-color: #4a4a4a;
+}
+
+QLabel {
+    color: #ffffff;
+    font-size: 12px;
+}
+
+QFrame {
+    background-color: #3c3c3c;
+    border: 1px solid #555555;
+    border-radius: 5px;
+}
+
+QSlider::groove:horizontal {
+    border: 1px solid #555555;
+    height: 8px;
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+QSlider::handle:horizontal {
+    background: #0078d4;
+    border: 1px solid #0078d4;
+    width: 18px;
+    border-radius: 9px;
+    margin: -2px 0;
+}
+
+QSlider::sub-page:horizontal {
+    background: #0078d4;
+    border-radius: 4px;
+}
+
+QPushButton {
+    background-color: #4a4a4a;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 8px;
+    color: #ffffff;
+    min-width: 60px;
+}
+
+QPushButton:hover {
+    background-color: #5a5a5a;
+}
+
+QPushButton:pressed {
+    background-color: #666666;
+}
+
+QStatusBar {
+    background-color: #3c3c3c;
+    border-top: 1px solid #555555;
+    color: #ffffff;
+}
+</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_main">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QToolBar" name="toolBar">
+      <property name="windowTitle">
+       <string>主工具栏</string>
+      </property>
+      <property name="movable">
+       <bool>false</bool>
+      </property>
+      <property name="floatable">
+       <bool>false</bool>
+      </property>
+      <addaction name="actionAddMusic"/>
+      <addaction name="actionCreateTag"/>
+      <addaction name="actionManageTag"/>
+      <addaction name="separator"/>
+      <addaction name="actionPlayInterface"/>
+      <addaction name="separator"/>
+      <addaction name="actionSettings"/>
+     </widget>
+    </item>
+    <item>
+     <widget class="QSplitter" name="splitter_main">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="childrenCollapsible">
+       <bool>false</bool>
+      </property>
+      <widget class="QFrame" name="frame_tags">
+       <property name="frameShape">
+        <enum>QFrame::Box</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Raised</enum>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>350</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_tags">
+        <item>
+         <widget class="QLabel" name="label_tags_title">
+          <property name="text">
+           <string>我的歌曲标签</string>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>14</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QFrame" name="frame_my_tags">
+          <property name="frameShape">
+           <enum>QFrame::Box</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_my_tags">
+           <item>
+            <widget class="QListWidget" name="listWidget_my_tags">
+             <property name="contextMenuPolicy">
+              <enum>Qt::CustomContextMenu</enum>
+             </property>
+             <property name="dragDropMode">
+              <enum>QAbstractItemView::InternalMove</enum>
+             </property>
+             <property name="selectionMode">
+              <enum>QAbstractItemView::SingleSelection</enum>
+             </property>
+             <property name="defaultDropAction">
+              <enum>Qt::MoveAction</enum>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QFrame" name="frame_songs">
+       <property name="frameShape">
+        <enum>QFrame::Box</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Raised</enum>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_songs">
+        <item>
+         <widget class="QFrame" name="frame_songs_header">
+          <property name="frameShape">
+           <enum>QFrame::Box</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>80</height>
+           </size>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_songs_header">
+           <item>
+            <widget class="QLabel" name="label_songs_title">
+             <property name="text">
+              <string>歌曲列表</string>
+             </property>
+             <property name="font">
+              <font>
+               <pointsize>14</pointsize>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QFrame" name="frame_songs_controls">
+             <property name="frameShape">
+              <enum>QFrame::NoFrame</enum>
+             </property>
+             <property name="frameShadow">
+              <enum>QFrame::Plain</enum>
+             </property>
+             <layout class="QHBoxLayout" name="horizontalLayout_songs_controls">
+              <item>
+               <widget class="QPushButton" name="pushButton_play_all">
+                <property name="text">
+                 <string>开始播放</string>
+                </property>
+                <property name="icon">
+                 <iconset resource="icon.qrc">
+                  <normaloff>:/new/prefix1/images/playIcon.png</normaloff>:/new/prefix1/images/playIcon.png</iconset>
+                </property>
+                <property name="toolTip">
+                 <string>播放当前列表中的所有歌曲</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_shuffle">
+                <property name="text">
+                 <string>全部</string>
+                </property>
+                <property name="icon">
+                 <iconset resource="icon.qrc">
+                  <normaloff>:/new/prefix1/images/reverseIcon.png</normaloff>:/new/prefix1/images/reverseIcon.png</iconset>
+                </property>
+                <property name="toolTip">
+                 <string>随机播放模式</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_repeat">
+                <property name="text">
+                 <string>全部</string>
+                </property>
+                <property name="icon">
+                 <iconset resource="icon.qrc">
+                  <normaloff>:/new/prefix1/images/playlistIcon.png</normaloff>:/new/prefix1/images/playlistIcon.png</iconset>
+                </property>
+                <property name="toolTip">
+                 <string>重复播放模式</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_sort">
+                <property name="text">
+                 <string>取消全选</string>
+                </property>
+                <property name="toolTip">
+                 <string>取消选择所有歌曲</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_delete">
+                <property name="text">
+                 <string>删除</string>
+                </property>
+                <property name="icon">
+                 <iconset resource="icon.qrc">
+                  <normaloff>:/new/prefix1/images/deleteIcon.png</normaloff>:/new/prefix1/images/deleteIcon.png</iconset>
+                </property>
+                <property name="toolTip">
+                 <string>删除选中的歌曲</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QListWidget" name="listWidget_songs">
+          <property name="contextMenuPolicy">
+           <enum>Qt::CustomContextMenu</enum>
+          </property>
+          <property name="dragDropMode">
+           <enum>QAbstractItemView::DragDrop</enum>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::ExtendedSelection</enum>
+          </property>
+          <property name="sortingEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+    <item>
+     <widget class="QFrame" name="frame_now_playing">
+      <property name="frameShape">
+       <enum>QFrame::Box</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>120</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_now_playing">
+       <item>
+        <widget class="QLabel" name="label_now_playing_title">
+         <property name="text">
+          <string>正在播放的歌曲</string>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="frame_playback_controls">
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Plain</enum>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_playback_controls">
+          <item>
+           <widget class="QFrame" name="frame_song_info">
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Plain</enum>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>300</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_song_info">
+             <item>
+              <widget class="QLabel" name="label_song_title">
+               <property name="text">
+                <string>歌曲名称</string>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>11</pointsize>
+                 <weight>75</weight>
+                 <bold>true</bold>
+                </font>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_song_artist">
+               <property name="text">
+                <string>艺术家</string>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="frame_playback_buttons">
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Plain</enum>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_playback_buttons">
+             <item>
+              <widget class="QPushButton" name="pushButton_previous">
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="icon.qrc">
+                 <normaloff>:/new/prefix1/images/lastSongIcon.png</normaloff>:/new/prefix1/images/lastSongIcon.png</iconset>
+               </property>
+               <property name="toolTip">
+                <string>上一首</string>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>24</width>
+                 <height>24</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButton_play_pause">
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="icon.qrc">
+                 <normaloff>:/new/prefix1/images/playIcon.png</normaloff>:/new/prefix1/images/playIcon.png</iconset>
+               </property>
+               <property name="toolTip">
+                <string>播放/暂停</string>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>32</width>
+                 <height>32</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButton_stop">
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="icon.qrc">
+                 <normaloff>:/new/prefix1/images/stopIcon.png</normaloff>:/new/prefix1/images/stopIcon.png</iconset>
+               </property>
+               <property name="toolTip">
+                <string>停止</string>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>24</width>
+                 <height>24</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButton_next">
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="icon.qrc">
+                 <normaloff>:/new/prefix1/images/followingSongIcon.png</normaloff>:/new/prefix1/images/followingSongIcon.png</iconset>
+               </property>
+               <property name="toolTip">
+                <string>下一首</string>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>24</width>
+                 <height>24</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="frame_progress">
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Plain</enum>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_progress">
+             <item>
+              <widget class="QSlider" name="slider_progress">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="tickPosition">
+                <enum>QSlider::NoTicks</enum>
+               </property>
+               <property name="toolTip">
+                <string>播放进度</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QFrame" name="frame_time">
+               <property name="frameShape">
+                <enum>QFrame::NoFrame</enum>
+               </property>
+               <property name="frameShadow">
+                <enum>QFrame::Plain</enum>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_time">
+                <item>
+                 <widget class="QLabel" name="label_current_time">
+                  <property name="text">
+                   <string>00:00</string>
+                  </property>
+                  <property name="font">
+                   <font>
+                    <pointsize>9</pointsize>
+                   </font>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_time">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_total_time">
+                  <property name="text">
+                   <string>00:00</string>
+                  </property>
+                  <property name="font">
+                   <font>
+                    <pointsize>9</pointsize>
+                   </font>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="frame_volume">
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Plain</enum>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>150</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_volume">
+             <item>
+              <widget class="QLabel" name="label_volume_icon">
+               <property name="text">
+                <string>🔊</string>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>12</pointsize>
+                </font>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="slider_volume">
+               <property name="minimum">
+                <number>0</number>
+               </property>
+               <property name="maximum">
+                <number>100</number>
+               </property>
+               <property name="value">
+                <number>50</number>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="toolTip">
+                <string>音量控制</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar">
+   <property name="styleSheet">
+    <string notr="true">QStatusBar {
+    background-color: #3c3c3c;
+    border-top: 1px solid #555555;
+    color: #ffffff;
+}</string>
+   </property>
+  </widget>
+  <action name="actionAddMusic">
+   <property name="icon">
+    <iconset resource="icon.qrc">
+     <normaloff>:/new/prefix1/images/addMusicIcon.png</normaloff>:/new/prefix1/images/addMusicIcon.png</iconset>
+   </property>
+   <property name="text">
+    <string>添加歌曲</string>
+   </property>
+   <property name="toolTip">
+    <string>添加音乐文件到播放列表</string>
+   </property>
+  </action>
+  <action name="actionCreateTag">
+   <property name="icon">
+    <iconset resource="icon.qrc">
+     <normaloff>:/new/prefix1/images/createIcon.png</normaloff>:/new/prefix1/images/createIcon.png</iconset>
+   </property>
+   <property name="text">
+    <string>创建标签</string>
+   </property>
+   <property name="toolTip">
+    <string>创建新的音乐标签</string>
+   </property>
+  </action>
+  <action name="actionManageTag">
+   <property name="icon">
+    <iconset resource="icon.qrc">
+     <normaloff>:/new/prefix1/images/manageIcon.png</normaloff>:/new/prefix1/images/manageIcon.png</iconset>
+   </property>
+   <property name="text">
+    <string>管理标签</string>
+   </property>
+   <property name="toolTip">
+    <string>管理和编辑音乐标签</string>
+   </property>
+  </action>
+  <action name="actionPlayInterface">
+   <property name="icon">
+    <iconset resource="icon.qrc">
+     <normaloff>:/new/prefix1/images/playIcon.png</normaloff>:/new/prefix1/images/playIcon.png</iconset>
+   </property>
+   <property name="text">
+    <string>播放界面</string>
+   </property>
+   <property name="toolTip">
+    <string>打开音频播放和可视化界面</string>
+   </property>
+  </action>
+  <action name="actionSettings">
+   <property name="text">
+    <string>设置</string>
+   </property>
+   <property name="toolTip">
+    <string>应用程序设置</string>
+   </property>
+  </action>
+ </widget>
+ <resources>
+  <include location="icon.qrc"/>
+ </resources>
+ <connections/>
+</ui>

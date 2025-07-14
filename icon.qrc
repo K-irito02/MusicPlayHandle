@@ -1,0 +1,24 @@
+<RCC>
+    <qresource prefix="/new/prefix1">
+        <file>images/addMusicIcon.png</file>
+        <file>images/addToListIcon.png</file>
+        <file>images/applicationIcon.png</file>
+        <file>images/copyIcon.png</file>
+        <file>images/createIcon.png</file>
+        <file>images/deleteIcon.png</file>
+        <file>images/editLabel.png</file>
+        <file>images/exit-discardChangesIcon.png</file>
+        <file>images/exit-SaveIcon.png</file>
+        <file>images/fastForwardIcon.png</file>
+        <file>images/followingSongIcon.png</file>
+        <file>images/lastSongIcon.png</file>
+        <file>images/manageIcon.png</file>
+        <file>images/moveIcon.png</file>
+        <file>images/pauseIcon.png</file>
+        <file>images/playIcon.png</file>
+        <file>images/playlistIcon.png</file>
+        <file>images/reverseIcon.png</file>
+        <file>images/stopIcon.png</file>
+        <file>images/undoIcon.png</file>
+    </qresource>
+</RCC>

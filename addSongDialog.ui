@@ -1,0 +1,464 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AddSongDialog</class>
+ <widget class="QDialog" name="AddSongDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>900</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>添加歌曲界面</string>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QDialog {
+    background-color: #2b2b2b;
+    color: #ffffff;
+}
+
+QLabel {
+    color: #ffffff;
+    font-size: 12px;
+}
+
+QListWidget {
+    background-color: #3c3c3c;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 5px;
+    color: #ffffff;
+}
+
+QListWidget::item {
+    padding: 8px;
+    border-bottom: 1px solid #555555;
+}
+
+QListWidget::item:selected {
+    background-color: #0078d4;
+    color: #ffffff;
+}
+
+QListWidget::item:hover {
+    background-color: #4a4a4a;
+}
+
+QPushButton {
+    background-color: #4a4a4a;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 8px;
+    color: #ffffff;
+    min-width: 100px;
+    min-height: 30px;
+}
+
+QPushButton:hover {
+    background-color: #5a5a5a;
+}
+
+QPushButton:pressed {
+    background-color: #666666;
+}
+
+QFrame {
+    background-color: #3c3c3c;
+    border: 1px solid #555555;
+    border-radius: 5px;
+}
+
+QComboBox {
+    background-color: #4a4a4a;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 5px;
+    color: #ffffff;
+    min-height: 25px;
+}
+
+QComboBox::drop-down {
+    border: none;
+    border-left: 1px solid #555555;
+    width: 20px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/new/prefix1/images/fastForwardIcon.png);
+    width: 12px;
+    height: 12px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #3c3c3c;
+    border: 1px solid #555555;
+    selection-background-color: #0078d4;
+    color: #ffffff;
+}
+</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_main">
+   <item>
+    <widget class="QSplitter" name="splitter_content">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="childrenCollapsible">
+      <bool>false</bool>
+     </property>
+     <widget class="QFrame" name="frame_added_songs">
+      <property name="frameShape">
+       <enum>QFrame::Box</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_added_songs">
+       <item>
+        <widget class="QLabel" name="label_added_songs">
+         <property name="text">
+          <string>添加的歌曲列表</string>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>14</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="listWidget_added_songs">
+         <property name="contextMenuPolicy">
+          <enum>Qt::CustomContextMenu</enum>
+         </property>
+         <property name="dragDropMode">
+          <enum>QAbstractItemView::DragDrop</enum>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::ExtendedSelection</enum>
+         </property>
+         <property name="toolTip">
+          <string>显示已添加的音乐文件列表</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QFrame" name="frame_existing_tags">
+      <property name="frameShape">
+       <enum>QFrame::Box</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_existing_tags">
+       <item>
+        <widget class="QLabel" name="label_existing_tags">
+         <property name="text">
+          <string>歌曲标签列表</string>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>14</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="listWidget_system_tags">
+         <property name="contextMenuPolicy">
+          <enum>Qt::CustomContextMenu</enum>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::ExtendedSelection</enum>
+         </property>
+         <property name="dragDropMode">
+          <enum>QAbstractItemView::InternalMove</enum>
+         </property>
+         <property name="toolTip">
+          <string>歌曲标签列表，支持拖拽调整位置</string>
+         </property>
+        </widget>
+       </item>
+
+      </layout>
+     </widget>
+     <widget class="QFrame" name="frame_operations">
+      <property name="frameShape">
+       <enum>QFrame::Box</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>180</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_operations">
+       <item>
+        <widget class="QLabel" name="label_operations">
+         <property name="text">
+          <string>操作</string>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>14</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_select_all">
+         <property name="text">
+          <string>全选歌曲</string>
+         </property>
+         <property name="toolTip">
+          <string>选择所有歌曲</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_deselect_all">
+         <property name="text">
+          <string>取消选中</string>
+         </property>
+         <property name="toolTip">
+          <string>取消选中所有歌曲</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_add_to_tag">
+         <property name="text">
+          <string>加入标签</string>
+         </property>
+         <property name="icon">
+          <iconset resource="icon.qrc">
+           <normaloff>:/new/prefix1/images/addToListIcon.png</normaloff>:/new/prefix1/images/addToListIcon.png</iconset>
+         </property>
+         <property name="toolTip">
+          <string>将选中的歌曲添加到选中的标签中</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_undo_add">
+         <property name="text">
+          <string>撤回加入</string>
+         </property>
+         <property name="icon">
+          <iconset resource="icon.qrc">
+           <normaloff>:/new/prefix1/images/undoIcon.png</normaloff>:/new/prefix1/images/undoIcon.png</iconset>
+         </property>
+         <property name="toolTip">
+          <string>撤回上一次的加入标签操作</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_create_tag">
+         <property name="text">
+          <string>创建标签</string>
+         </property>
+         <property name="icon">
+          <iconset resource="icon.qrc">
+           <normaloff>:/new/prefix1/images/createIcon.png</normaloff>:/new/prefix1/images/createIcon.png</iconset>
+         </property>
+         <property name="toolTip">
+          <string>创建新的音乐标签</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_delete_tag">
+         <property name="text">
+          <string>删除标签</string>
+         </property>
+         <property name="icon">
+          <iconset resource="icon.qrc">
+           <normaloff>:/new/prefix1/images/deleteIcon.png</normaloff>:/new/prefix1/images/deleteIcon.png</iconset>
+         </property>
+         <property name="toolTip">
+          <string>删除选中的标签（系统标签不可删除）</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_edit_tag">
+         <property name="text">
+          <string>编辑标签</string>
+         </property>
+         <property name="icon">
+          <iconset resource="icon.qrc">
+           <normaloff>:/new/prefix1/images/editLabel.png</normaloff>:/new/prefix1/images/editLabel.png</iconset>
+         </property>
+         <property name="toolTip">
+          <string>编辑选中标签的名称和封面</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_add_songs">
+         <property name="text">
+          <string>添加歌曲</string>
+         </property>
+         <property name="icon">
+          <iconset resource="icon.qrc">
+           <normaloff>:/new/prefix1/images/addMusicIcon.png</normaloff>:/new/prefix1/images/addMusicIcon.png</iconset>
+         </property>
+         <property name="toolTip">
+          <string>从本地文件系统添加更多歌曲</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_operations">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="frame_dialog_buttons">
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Plain</enum>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>80</height>
+      </size>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_dialog_buttons">
+      <item>
+       <spacer name="horizontalSpacer_left">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_exit_discard">
+        <property name="text">
+         <string>退出不保存</string>
+        </property>
+        <property name="icon">
+         <iconset resource="icon.qrc">
+          <normaloff>:/new/prefix1/images/exit-discardChangesIcon.png</normaloff>:/new/prefix1/images/exit-discardChangesIcon.png</iconset>
+        </property>
+        <property name="toolTip">
+         <string>退出对话框并丢弃所有更改</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_exit_save">
+        <property name="text">
+         <string>退出并保存</string>
+        </property>
+        <property name="icon">
+         <iconset resource="icon.qrc">
+          <normaloff>:/new/prefix1/images/exit-SaveIcon.png</normaloff>:/new/prefix1/images/exit-SaveIcon.png</iconset>
+        </property>
+        <property name="toolTip">
+         <string>保存所有更改并退出对话框</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_right">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="icon.qrc"/>
+ </resources>
+ <connections>
+  <connection>
+   <sender>pushButton_exit_discard</sender>
+   <signal>clicked()</signal>
+   <receiver>AddSongDialog</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>320</x>
+     <y>555</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>449</x>
+     <y>299</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_exit_save</sender>
+   <signal>clicked()</signal>
+   <receiver>AddSongDialog</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>580</x>
+     <y>555</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>449</x>
+     <y>299</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

@@ -1,0 +1,186 @@
+# .clang-format
+# Qt6/C++11专家团队代码格式化配置
+# 基于Qt代码风格和现代C++最佳实践
+
+# 基础配置
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++17
+
+# 缩进配置
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentCaseLabels: true
+IndentPPDirectives: BeforeHash
+IndentWrappedFunctionNames: false
+IndentAccessModifiers: false
+AccessModifierOffset: -4
+
+# 换行配置
+ColumnLimit: 100
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: Never
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+# 函数和参数格式化
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: Inline
+
+# 参数和初始化列表
+BinPackArguments: false
+BinPackParameters: false
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 4
+
+# 指针和引用对齐
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# 空格配置
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# 对齐配置
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignConsecutiveMacros: false
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+
+# 排序和包含
+SortIncludes: true
+SortUsingDeclarations: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Qt headers
+  - Regex: '^<Q.*>'
+    Priority: 2
+  # Standard library headers
+  - Regex: '^<.*>'
+    Priority: 1
+  # Project headers
+  - Regex: '^".*"'
+    Priority: 3
+
+# 换行和连续
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+BreakStringLiterals: true
+ContinuationIndentWidth: 4
+MaxEmptyLinesToKeep: 2
+
+# 宏和预处理器
+IndentPPDirectives: BeforeHash
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+
+# 命名空间
+CompactNamespaces: false
+FixNamespaceComments: true
+NamespaceIndentation: None
+
+# 其他配置
+KeepEmptyLinesAtTheStartOfBlocks: false
+ReflowComments: true
+SpacesBeforeTrailingComments: 2
+
+# Qt特定配置
+# 保持Qt的信号槽连接在一行
+AllowShortFunctionsOnASingleLine: Inline
+
+# 模板配置
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeTemplateDeclarations: true
+
+# 注释格式化
+CommentPragmas: '^ IWYU pragma:'
+DisableFormat: false
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
+
+# 原始字符串格式化
+RawStringFormats:
+  - Language: Cpp
+    Delimiters:
+      - cc
+      - CC
+      - cpp
+      - Cpp
+      - CPP
+      - 'c++'
+      - 'C++'
+    CanonicalDelimiter: ''
+    BasedOnStyle: google
+
+# 惩罚配置（用于优化换行决策）
+PenaltyBreakAssignment: 2
+PenaltyBreakBeforeFirstCallParameter: 19
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 10
+PenaltyExcessCharacter: 1000000
+PenaltyReturnTypeOnItsOwnLine: 60
+PenaltyIndentedWhitespace: 0
+
+# 实验性功能
+ExperimentalAutoDetectBinPacking: false
+
+# 特殊情况处理
+AllowAllArgumentsOnNextLine: true
+AllowAllConstructorInitializersOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# Java风格数组初始化（不适用于C++，但保留配置）
+JavaScriptQuotes: Leave
+JavaScriptWrapImports: true
+
+# 其他语言特定配置（保留以备将来使用）
+ObjCBinPackProtocolList: Auto
+ObjCBlockIndentWidth: 2
+ObjCBreakBeforeNestedBlockParam: true
+ObjCSpaceAfterProperty: false
+ObjCSpaceBeforeProtocolList: true
