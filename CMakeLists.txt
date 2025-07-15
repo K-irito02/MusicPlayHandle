@@ -66,6 +66,7 @@ set(CORE_SOURCES
     src/core/applicationmanager.cpp
     src/core/databasemanager.cpp
     src/core/tagmanager.cpp
+    src/managers/playlistmanager.cpp
 )
 
 set(CORE_HEADERS
@@ -87,6 +88,7 @@ set(CORE_HEADERS
     src/core/applicationmanager.h
     src/core/databasemanager.h
     src/core/tagmanager.h
+    src/managers/playlistmanager.h
 )
 
 # UI组件源文件
@@ -117,13 +119,17 @@ set(MODEL_HEADERS
 
 # DAO源文件
 set(DAO_SOURCES
-    src/dao/tagdao.cpp
-    src/dao/songdao.cpp
+    src/database/basedao.cpp
+    src/database/tagdao.cpp
+    src/database/songdao.cpp
+    src/database/playlistdao.cpp
 )
 
 set(DAO_HEADERS
-    src/dao/tagdao.h
-    src/dao/songdao.h
+    src/database/basedao.h
+    src/database/tagdao.h
+    src/database/songdao.h
+    src/database/playlistdao.h
 )
 
 # UI文件

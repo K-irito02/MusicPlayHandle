@@ -2,6 +2,7 @@
 #define TAGLISTITEMFACTORY_H
 
 #include <memory>
+#include <utility>
 #include <QString>
 #include <QWidget>
 #include "taglistitem.h"
@@ -76,13 +77,13 @@ public:
      * @param parent 父控件
      * @return 系统标签项列表
      */
-    static QList<std::unique_ptr<TagListItem>> createAllSystemTags(QWidget* parent = nullptr)
+    static QList<TagListItem*> createAllSystemTags(QWidget* parent = nullptr)
     {
-        QList<std::unique_ptr<TagListItem>> items;
+        QList<TagListItem*> items;
         const auto systemTags = Constants::SystemTags::getAll();
         
         for (const QString& tagName : systemTags) {
-            items.append(createSystemTag(tagName, parent));
+            items.append(createSystemTag(tagName, parent).release());
         }
         
         return items;

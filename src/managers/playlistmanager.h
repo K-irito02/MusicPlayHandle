@@ -18,6 +18,9 @@
 #include "../models/playlist.h"
 #include "../database/songdao.h"
 
+// 前向声明
+class PlaylistDao;
+
 // 播放模式
 enum class PlayMode {
     Sequential,     // 顺序播放
@@ -25,6 +28,20 @@ enum class PlayMode {
     SingleLoop,    // 单曲循环
     Random,        // 随机播放
     Shuffle        // 洗牌播放
+};
+
+// 重复播放模式
+enum class RepeatMode {
+    NoRepeat,      // 不重复
+    RepeatOne,     // 单曲循环
+    RepeatAll      // 列表循环
+};
+
+// 导出格式
+enum class ExportFormat {
+    M3U,           // M3U 格式
+    PLS,           // PLS 格式
+    JSON           // JSON 格式
 };
 
 // 播放列表状态
@@ -53,10 +70,11 @@ enum class PlaylistOperation {
 struct PlaylistOperationResult {
     bool success;
     QString message;
+    QString errorMessage;
     QVariant data;
     
     PlaylistOperationResult(bool s = false, const QString& msg = QString(), const QVariant& d = QVariant())
-        : success(s), message(msg), data(d) {}
+        : success(s), message(msg), errorMessage(msg), data(d) {}
 };
 
 // 播放统计信息
@@ -148,6 +166,26 @@ public:
     void playAt(int index);
     void playPlaylist(int playlistId);
     void playSong(const Song& song);
+    
+    // 重复播放模式
+    void setRepeatMode(RepeatMode mode);
+    RepeatMode getRepeatMode() const;
+    
+    // 洗牌模式
+    void setShuffleMode(bool enabled);
+    bool isShuffleMode() const;
+    
+    // 导入导出
+    bool exportPlaylist(int playlistId, const QString& filePath, ExportFormat format);
+    bool importPlaylist(const QString& filePath, const QString& playlistName);
+    
+    // 当前播放列表管理
+    void clearCurrentPlaylist();
+    bool loadPlaylist(int playlistId);
+    int getCurrentSongIndex() const;
+    bool setCurrentSongIndex(int index);
+    Song getNextSong();
+    Song getPreviousSong();
     
     // 播放位置管理
     void setCurrentIndex(int index);
@@ -280,6 +318,8 @@ signals:
     void currentIndexChanged(int index);
     void playModeChanged(PlayMode mode);
     void stateChanged(PlaylistState state);
+    void repeatModeChanged(RepeatMode mode);
+    void shuffleModeChanged(bool enabled);
     
     // 播放队列信号
     void queueChanged();
@@ -311,6 +351,7 @@ private:
     static QMutex m_instanceMutex;
     
     // 数据访问对象
+    PlaylistDao* m_playlistDao;
     SongDao* m_songDao;
     
     // 播放列表数据
@@ -320,9 +361,16 @@ private:
     
     // 当前播放状态
     int m_currentPlaylistId;
+    Playlist m_currentPlaylist;
+    QList<Song> m_currentPlaylistSongs;
     int m_currentIndex;
+    int m_currentSongIndex;
     PlayMode m_playMode;
     PlaylistState m_state;
+    RepeatMode m_repeatMode;
+    bool m_shuffleMode;
+    QList<int> m_shuffledIndices;
+    int m_shuffleIndex;
     
     // 播放队列
     QQueue<QueueItem> m_playQueue;
@@ -366,10 +414,24 @@ private:
     // 内部索引生成
     int m_nextPlaylistId;
     
-    // 内部方法
+    // 内部辅助方法
     bool loadPlaylistsFromDatabase();
     bool savePlaylistToDatabase(const Playlist& playlist);
     bool deletePlaylistFromDatabase(int playlistId);
+    bool initializeDao();
+    void createDefaultPlaylists();
+    int getNextSortOrder() const;
+    void generateShuffledIndices();
+    int getNextSongIndex() const;
+    int getPreviousSongIndex() const;
+    
+    // 导出导入辅助方法
+    bool exportToM3U(const Playlist& playlist, const QList<Song>& songs, const QString& filePath);
+    bool exportToPLS(const Playlist& playlist, const QList<Song>& songs, const QString& filePath);
+    bool exportToJSON(const Playlist& playlist, const QList<Song>& songs, const QString& filePath);
+    bool importFromM3U(const QString& filePath, const QString& playlistName);
+    bool importFromPLS(const QString& filePath, const QString& playlistName);
+    bool importFromJSON(const QString& filePath, const QString& playlistName);
     
     // 播放控制实现
     void playInternal();
@@ -458,7 +520,10 @@ public:
 
 // 注册元类型
 Q_DECLARE_METATYPE(PlayMode)
+Q_DECLARE_METATYPE(RepeatMode)
+Q_DECLARE_METATYPE(ExportFormat)
 Q_DECLARE_METATYPE(PlaylistState)
 Q_DECLARE_METATYPE(PlaylistOperation)
+Q_DECLARE_METATYPE(PlaylistOperationResult)
 
-#endif // PLAYLISTMANAGER_H 
+#endif // PLAYLISTMANAGER_H

@@ -2,6 +2,8 @@
 #include "ui_AddSongDialog.h"
 #include "../controllers/addsongdialogcontroller.h"
 #include "../widgets/taglistitem.h"
+#include "../widgets/taglistitemfactory.h"
+#include "../../core/constants.h"
 
 AddSongDialog::AddSongDialog(QWidget *parent)
     : QDialog(parent)
@@ -101,12 +103,12 @@ void AddSongDialog::setAvailableTags(const QStringList& tags)
     // 重新初始化默认标签
     initializeDefaultTags();
     
-    // 添加所有标签到system_tags列表
-    QStringList systemTags = {"我的歌曲", "我的收藏", "最近播放"};
+    // 添加用户创建的标签到system_tags列表
+    QStringList systemTags = {Constants::SystemTags::MY_SONGS, Constants::SystemTags::FAVORITES};
     for (const QString& tag : tags) {
         if (!systemTags.contains(tag)) { // 避免重复添加系统标签
-            // 创建自定义标签项控件
-            TagListItem* tagItem = new TagListItem(tag, QString(), true, true);
+            // 使用工厂类创建用户标签
+            auto tagItem = TagListItemFactory::createUserTag(tag, QString(), this);
             
             // 创建QListWidgetItem并设置自定义控件
             QListWidgetItem* item = new QListWidgetItem();
@@ -114,7 +116,7 @@ void AddSongDialog::setAvailableTags(const QStringList& tags)
             item->setSizeHint(tagItem->sizeHint());
             
             ui->listWidget_system_tags->addItem(item);
-            ui->listWidget_system_tags->setItemWidget(item, tagItem);
+            ui->listWidget_system_tags->setItemWidget(item, tagItem.release());
         }
     }
     
@@ -210,21 +212,37 @@ void AddSongDialog::updateButtonStates()
     // 创建标签按钮 - 始终可用
     ui->pushButton_create_tag->setEnabled(true);
     
-    // 删除标签按钮 - 选中非"我的歌曲"标签时可用
+    // 删除标签按钮 - 选中可删除的标签时可用
     bool canDeleteTag = false;
     if (hasTagSelected) {
         QList<QListWidgetItem*> selectedItems = ui->listWidget_system_tags->selectedItems();
         for (QListWidgetItem* item : selectedItems) {
-            if (item && item->text() != "我的歌曲") {
-                canDeleteTag = true;
-                break;
+            if (item) {
+                TagListItem* tagItem = qobject_cast<TagListItem*>(ui->listWidget_system_tags->itemWidget(item));
+                if (tagItem && tagItem->isDeletable()) {
+                    canDeleteTag = true;
+                    break;
+                }
             }
         }
     }
     ui->pushButton_delete_tag->setEnabled(canDeleteTag);
     
-    // 编辑标签按钮 - 有选中标签时可用
-    ui->pushButton_edit_tag->setEnabled(hasTagSelected);
+    // 编辑标签按钮 - 选中可编辑的标签时可用
+    bool canEditTag = false;
+    if (hasTagSelected) {
+        QList<QListWidgetItem*> selectedItems = ui->listWidget_system_tags->selectedItems();
+        for (QListWidgetItem* item : selectedItems) {
+            if (item) {
+                TagListItem* tagItem = qobject_cast<TagListItem*>(ui->listWidget_system_tags->itemWidget(item));
+                if (tagItem && tagItem->isEditable()) {
+                    canEditTag = true;
+                    break;
+                }
+            }
+        }
+    }
+    ui->pushButton_edit_tag->setEnabled(canEditTag);
     
     // 加入标签按钮 - 需要同时选中歌曲和标签
     ui->pushButton_add_to_tag->setEnabled(hasSongSelected && hasTagSelected);
@@ -294,10 +312,12 @@ void AddSongDialog::onDeleteTagClicked()
         return;
     }
     
-    // 检查是否包含"我的歌曲"标签
-    if (selectedTags.contains("我的歌曲")) {
-        showStatusMessage("'我的歌曲'标签不可删除");
-        return;
+    // 检查是否包含系统标签
+    for (const QString& tagName : selectedTags) {
+        if (Constants::SystemTags::isSystemTag(tagName)) {
+            showStatusMessage(QString("'%1'标签不可删除").arg(tagName));
+            return;
+        }
     }
     
     if (m_controller) {
@@ -316,10 +336,9 @@ void AddSongDialog::onEditTagClicked()
     }
     
     // 检查是否包含系统标签
-    QStringList systemTags = {"我的歌曲", "我的收藏", "最近播放"};
-    for (const QString& systemTag : systemTags) {
-        if (selectedTags.contains(systemTag)) {
-            showStatusMessage(QString("'%1'标签不可编辑").arg(systemTag));
+    for (const QString& tagName : selectedTags) {
+        if (Constants::SystemTags::isSystemTag(tagName)) {
+            showStatusMessage(QString("'%1'标签不可编辑").arg(tagName));
             return;
         }
     }
@@ -468,17 +487,27 @@ void AddSongDialog::onTagCreated(const QString& tagName, bool isSystemTag)
 {
     Q_UNUSED(isSystemTag)  // 标记参数为未使用，避免编译警告
     
-    // 添加新创建的标签到标签列表
-    // 创建自定义标签项控件
-    TagListItem* tagItem = new TagListItem(tagName, QString(), true, true);
-    
-    // 创建QListWidgetItem并设置自定义控件
-    QListWidgetItem* item = new QListWidgetItem();
-    item->setData(Qt::UserRole, tagName);
-    item->setSizeHint(tagItem->sizeHint());
-    
-    ui->listWidget_system_tags->addItem(item);
-    ui->listWidget_system_tags->setItemWidget(item, tagItem);
+    // 重新获取所有标签并刷新列表，确保默认标签不会消失
+    if (m_controller) {
+        // 先重新从数据库加载标签，然后更新UI
+        m_controller->loadTagsFromDatabase();
+        m_controller->updateTagList();
+    } else {
+        // 如果没有控制器，手动刷新标签列表
+        // 清空现有标签
+        ui->listWidget_system_tags->clear();
+        
+        // 重新初始化默认标签
+        initializeDefaultTags();
+        
+        // 添加新创建的标签
+        auto tagItem = TagListItemFactory::createUserTag(tagName, QString(), this);
+        QListWidgetItem* item = new QListWidgetItem();
+        item->setData(Qt::UserRole, tagName);
+        item->setSizeHint(tagItem->sizeHint());
+        ui->listWidget_system_tags->addItem(item);
+        ui->listWidget_system_tags->setItemWidget(item, tagItem.release());
+    }
     
     updateButtonStates();
     showStatusMessage(QString("标签 '%1' 创建成功").arg(tagName));
@@ -511,12 +540,12 @@ void AddSongDialog::onDeselectAllClicked()
 
 void AddSongDialog::initializeDefaultTags()
 {
-    // 添加默认的系统标签
-    QStringList systemTags = {"我的歌曲", "我的收藏", "最近播放"};
+    // 添加默认的系统标签（只显示"我的歌曲"和"我的收藏"）
+    QStringList systemTags = {Constants::SystemTags::MY_SONGS, Constants::SystemTags::FAVORITES};
     
     for (const QString& tagName : systemTags) {
-        // 创建自定义标签项控件
-        TagListItem* tagItem = new TagListItem(tagName, QString(), false, false);
+        // 使用工厂类创建系统标签
+        auto tagItem = TagListItemFactory::createSystemTag(tagName, this);
         
         // 创建QListWidgetItem并设置自定义控件
         QListWidgetItem* item = new QListWidgetItem();
@@ -524,7 +553,7 @@ void AddSongDialog::initializeDefaultTags()
         item->setSizeHint(tagItem->sizeHint());
         
         ui->listWidget_system_tags->addItem(item);
-        ui->listWidget_system_tags->setItemWidget(item, tagItem);
+        ui->listWidget_system_tags->setItemWidget(item, tagItem.release());
     }
 }
 

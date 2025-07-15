@@ -42,6 +42,10 @@ public:
         bool isCopy; // true为复制，false为移动
     };
     QList<SongMove> getSongMoves() const;
+    
+    QListWidget* getSongListWidget();
+    void selectAllSongs();
+    void deselectAllSongs();
 
 signals:
     void tagCreated(const QString& tagName);
@@ -90,6 +94,10 @@ private:
     QString getSelectedTag1() const;
     QString getSelectedTag2() const;
     QStringList getSelectedSongs() const;
+    QString formatDuration(qint64 duration) const;
+    
+    // 添加缺少的方法声明
+    QListWidget* getSongListWidget() const { return songList; }
 
 private:
     // 三个列表控件

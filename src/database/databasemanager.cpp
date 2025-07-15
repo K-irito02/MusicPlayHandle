@@ -1,24 +1,21 @@
 #include "databasemanager.h"
-#include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
 #include <QDir>
 #include <QStandardPaths>
 #include <QMutexLocker>
 #include <QDebug>
+#include <QSqlRecord>
+#include <QVariant>
 
 // 静态成员初始化
 DatabaseManager* DatabaseManager::m_instance = nullptr;
 QMutex DatabaseManager::m_mutex;
-const QString DatabaseManager::DEFAULT_CONNECTION_NAME = "default";
+const QString DatabaseManager::CONNECTION_NAME = "MusicPlayerDB";
 
 DatabaseManager* DatabaseManager::instance()
 {
-    if (m_instance == nullptr) {
-        QMutexLocker locker(&m_mutex);
-        if (m_instance == nullptr) {
-            m_instance = new DatabaseManager();
-        }
+    QMutexLocker locker(&m_mutex);
+    if (!m_instance) {
+        m_instance = new DatabaseManager();
     }
     return m_instance;
 }
@@ -26,460 +23,280 @@ DatabaseManager* DatabaseManager::instance()
 DatabaseManager::DatabaseManager(QObject* parent)
     : QObject(parent)
     , m_initialized(false)
-    , m_inTransaction(false)
 {
+    qDebug() << "DatabaseManager 构造函数";
 }
 
 DatabaseManager::~DatabaseManager()
 {
     closeDatabase();
+    qDebug() << "DatabaseManager 析构函数";
 }
 
 bool DatabaseManager::initialize(const QString& dbPath)
 {
-    QMutexLocker locker(&m_dbMutex);
+    qDebug() << "DatabaseManager::initialize() - 开始初始化，路径:" << dbPath;
     
     if (m_initialized) {
+        qDebug() << "数据库已经初始化";
         return true;
     }
     
-    m_databasePath = dbPath;
-    
     // 确保数据库目录存在
     QFileInfo fileInfo(dbPath);
-    QDir dir = fileInfo.dir();
+    QDir dir = fileInfo.absoluteDir();
     if (!dir.exists()) {
-        if (!dir.mkpath(dir.absolutePath())) {
-            logError("Failed to create database directory: " + dir.absolutePath());
+        if (!dir.mkpath(".")) {
+            logError("无法创建数据库目录: " + dir.absolutePath());
             return false;
         }
+        qDebug() << "创建数据库目录:" << dir.absolutePath();
     }
     
     // 创建数据库连接
-    m_database = QSqlDatabase::addDatabase("QSQLITE", DEFAULT_CONNECTION_NAME);
+    m_database = QSqlDatabase::addDatabase("QSQLITE", CONNECTION_NAME);
     m_database.setDatabaseName(dbPath);
     
+    qDebug() << "尝试打开数据库:" << dbPath;
     if (!m_database.open()) {
-        logError("Failed to open database: " + m_database.lastError().text());
+        logError("无法打开数据库: " + m_database.lastError().text());
         return false;
     }
     
-    // 设置数据库选项
-    QSqlQuery query(m_database);
-    query.exec("PRAGMA foreign_keys = ON");
-    query.exec("PRAGMA journal_mode = WAL");
-    query.exec("PRAGMA synchronous = NORMAL");
+    qDebug() << "数据库连接成功";
     
-    // TODO: 创建表结构
+    // 创建表结构
     if (!createTables()) {
-        logError("Failed to create database tables");
+        logError("创建数据库表失败");
+        closeDatabase();
         return false;
     }
     
-    // TODO: 创建索引
-    if (!createIndexes()) {
-        logError("Failed to create database indexes");
-        return false;
-    }
-    
-    // TODO: 创建触发器
-    if (!createTriggers()) {
-        logError("Failed to create database triggers");
-        return false;
-    }
-    
-    // TODO: 插入初始数据
+    // 插入初始数据
     if (!insertInitialData()) {
-        logError("Failed to insert initial data");
+        logError("插入初始数据失败");
+        closeDatabase();
         return false;
     }
     
     m_initialized = true;
-    emit databaseConnected();
-    
-    qDebug() << "Database initialized successfully:" << dbPath;
+    qDebug() << "数据库初始化完成";
     return true;
-}
-
-QSqlDatabase DatabaseManager::database()
-{
-    return m_database;
-}
-
-QSqlDatabase DatabaseManager::database(const QString& connectionName)
-{
-    return QSqlDatabase::database(connectionName);
-}
-
-bool DatabaseManager::beginTransaction()
-{
-    QMutexLocker locker(&m_dbMutex);
-    
-    if (m_inTransaction) {
-        return false;
-    }
-    
-    if (m_database.transaction()) {
-        m_inTransaction = true;
-        emit transactionStarted();
-        return true;
-    }
-    
-    logError("Failed to begin transaction: " + m_database.lastError().text());
-    return false;
-}
-
-bool DatabaseManager::commitTransaction()
-{
-    QMutexLocker locker(&m_dbMutex);
-    
-    if (!m_inTransaction) {
-        return false;
-    }
-    
-    if (m_database.commit()) {
-        m_inTransaction = false;
-        emit transactionCommitted();
-        return true;
-    }
-    
-    logError("Failed to commit transaction: " + m_database.lastError().text());
-    return false;
-}
-
-bool DatabaseManager::rollbackTransaction()
-{
-    QMutexLocker locker(&m_dbMutex);
-    
-    if (!m_inTransaction) {
-        return false;
-    }
-    
-    if (m_database.rollback()) {
-        m_inTransaction = false;
-        emit transactionRolledBack();
-        return true;
-    }
-    
-    logError("Failed to rollback transaction: " + m_database.lastError().text());
-    return false;
 }
 
 bool DatabaseManager::isValid() const
 {
-    return m_initialized && m_database.isValid() && m_database.isOpen();
+    return m_initialized && m_database.isOpen() && m_database.isValid();
 }
 
-QString DatabaseManager::lastError() const
+QSqlDatabase DatabaseManager::database() const
 {
-    return m_lastError;
+    return QSqlDatabase::database(CONNECTION_NAME);
+}
+
+QSqlQuery DatabaseManager::executeQuery(const QString& queryStr)
+{
+    QSqlQuery query(database());
+    if (!query.exec(queryStr)) {
+        logError("查询执行失败: " + query.lastError().text() + " SQL: " + queryStr);
+    }
+    return query;
+}
+
+bool DatabaseManager::executeUpdate(const QString& queryStr)
+{
+    QSqlQuery query(database());
+    if (!query.exec(queryStr)) {
+        logError("更新操作失败: " + query.lastError().text() + " SQL: " + queryStr);
+        return false;
+    }
+    return true;
 }
 
 void DatabaseManager::closeDatabase()
 {
-    QMutexLocker locker(&m_dbMutex);
-    
     if (m_database.isOpen()) {
         m_database.close();
+        qDebug() << "数据库连接已关闭";
     }
-    
+    QSqlDatabase::removeDatabase(CONNECTION_NAME);
     m_initialized = false;
-    m_inTransaction = false;
-    
-    qDebug() << "Database closed";
 }
 
 bool DatabaseManager::createTables()
 {
-    QMutexLocker locker(&m_mutex);
+    qDebug() << "开始创建数据库表";
     
-    if (!isValid()) {
-        qCritical() << "Database not connected";
-        return false;
-    }
-    
-    // 创建歌曲表
     if (!createSongsTable()) {
-        qCritical() << "Failed to create songs table";
         return false;
     }
     
-    // 创建标签表
     if (!createTagsTable()) {
-        qCritical() << "Failed to create tags table";
         return false;
     }
     
-    // 创建错误日志表
-    if (!createErrorLogTable()) {
-        qCritical() << "Failed to create error log table";
+    if (!createLogsTable()) {
         return false;
     }
     
-    // 创建系统日志表
-    if (!createSystemLogTable()) {
-        qCritical() << "Failed to create system log table";
-        return false;
-    }
-    
+    qDebug() << "所有数据库表创建完成";
     return true;
 }
 
-bool DatabaseManager::createErrorLogTable()
+bool DatabaseManager::createSongsTable()
 {
-    QSqlQuery query(m_database);
-    
-    QString createSql = R"(
-        CREATE TABLE IF NOT EXISTS error_logs (
+    const QString createSongsSQL = R"(
+        CREATE TABLE IF NOT EXISTS songs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp INTEGER NOT NULL,
-            level TEXT NOT NULL,
-            category TEXT NOT NULL,
-            message TEXT NOT NULL,
-            file_path TEXT,
-            line_number INTEGER,
-            function_name TEXT,
-            thread_id TEXT,
-            user_id TEXT,
-            session_id TEXT,
-            error_code INTEGER,
-            stack_trace TEXT,
-            system_info TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            title TEXT NOT NULL,
+            artist TEXT,
+            album TEXT,
+            file_path TEXT NOT NULL UNIQUE,
+            duration INTEGER DEFAULT 0,
+            file_size INTEGER DEFAULT 0,
+            date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_played DATETIME,
+            play_count INTEGER DEFAULT 0,
+            rating INTEGER DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
+            tags TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     )";
     
-    if (!query.exec(createSql)) {
-        qCritical() << "Failed to create error_logs table:" << query.lastError().text();
+    if (!executeUpdate(createSongsSQL)) {
+        logError("创建songs表失败");
         return false;
     }
     
-    // 创建索引（分别执行每条语句）
-    QStringList indexSqls = {
-        "CREATE INDEX IF NOT EXISTS idx_error_logs_timestamp ON error_logs(timestamp)",
-        "CREATE INDEX IF NOT EXISTS idx_error_logs_level ON error_logs(level)",
-        "CREATE INDEX IF NOT EXISTS idx_error_logs_category ON error_logs(category)",
-        "CREATE INDEX IF NOT EXISTS idx_error_logs_thread_id ON error_logs(thread_id)"
+    // 创建索引
+    const QStringList indexes = {
+        "CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(title)",
+        "CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist)",
+        "CREATE INDEX IF NOT EXISTS idx_songs_file_path ON songs(file_path)",
+        "CREATE INDEX IF NOT EXISTS idx_songs_date_added ON songs(date_added)"
     };
     
-    for (const QString& indexSql : indexSqls) {
-        if (!query.exec(indexSql)) {
-            qCritical() << "Failed to create error_logs index:" << indexSql << query.lastError().text();
+    for (const QString& indexSQL : indexes) {
+        if (!executeUpdate(indexSQL)) {
+            logError("创建songs表索引失败: " + indexSQL);
             return false;
         }
     }
     
+    qDebug() << "songs表创建成功";
     return true;
 }
 
-bool DatabaseManager::createSystemLogTable()
+bool DatabaseManager::createTagsTable()
 {
-    QSqlQuery query(m_database);
-    
-    QString createSql = R"(
-        CREATE TABLE IF NOT EXISTS system_logs (
+    const QString createTagsSQL = R"(
+        CREATE TABLE IF NOT EXISTS tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp INTEGER NOT NULL,
-            level TEXT NOT NULL,
-            category TEXT NOT NULL,
-            message TEXT NOT NULL,
-            component TEXT,
-            operation TEXT,
-            duration INTEGER,
-            memory_usage INTEGER,
-            cpu_usage REAL,
-            thread_id TEXT,
-            session_id TEXT,
-            metadata TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            name TEXT NOT NULL UNIQUE,
+            color TEXT DEFAULT '#3498db',
+            description TEXT,
+            is_system INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     )";
     
-    if (!query.exec(createSql)) {
-        qCritical() << "Failed to create system_logs table:" << query.lastError().text();
+    if (!executeUpdate(createTagsSQL)) {
+        logError("创建tags表失败");
         return false;
     }
     
-    // 创建索引（分别执行每条语句）
-    QStringList indexSqls = {
-        "CREATE INDEX IF NOT EXISTS idx_system_logs_timestamp ON system_logs(timestamp)",
-        "CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level)",
-        "CREATE INDEX IF NOT EXISTS idx_system_logs_category ON system_logs(category)",
-        "CREATE INDEX IF NOT EXISTS idx_system_logs_component ON system_logs(component)",
-        "CREATE INDEX IF NOT EXISTS idx_system_logs_thread_id ON system_logs(thread_id)"
+    // 创建索引
+    const QString indexSQL = "CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)";
+    if (!executeUpdate(indexSQL)) {
+        logError("创建tags表索引失败");
+        return false;
+    }
+    
+    qDebug() << "tags表创建成功";
+    return true;
+}
+
+bool DatabaseManager::createLogsTable()
+{
+    const QString createLogsSQL = R"(
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,
+            message TEXT NOT NULL,
+            category TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    )";
+    
+    if (!executeUpdate(createLogsSQL)) {
+        logError("创建logs表失败");
+        return false;
+    }
+    
+    // 创建索引
+    const QStringList indexes = {
+        "CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)",
+        "CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp)"
     };
     
-    for (const QString& indexSql : indexSqls) {
-        if (!query.exec(indexSql)) {
-            qCritical() << "Failed to create system_logs index:" << indexSql << query.lastError().text();
+    for (const QString& indexSQL : indexes) {
+        if (!executeUpdate(indexSQL)) {
+            logError("创建logs表索引失败: " + indexSQL);
             return false;
         }
     }
     
-    return true;
-}
-
-bool DatabaseManager::createIndexes()
-{
-    // TODO: 实现索引创建逻辑
-    return true;
-}
-
-bool DatabaseManager::createTriggers()
-{
-    // TODO: 实现触发器创建逻辑
+    qDebug() << "logs表创建成功";
     return true;
 }
 
 bool DatabaseManager::insertInitialData()
 {
-    QSqlQuery query(m_database);
+    qDebug() << "开始插入初始数据";
     
-    // 检查是否已经有系统标签
-    query.prepare("SELECT COUNT(*) FROM tags WHERE is_system = 1");
-    if (!query.exec()) {
-        qCritical() << "Failed to check system tags:" << query.lastError().text();
-        return false;
-    }
-    
-    if (query.next() && query.value(0).toInt() > 0) {
-        // 系统标签已存在，无需重复插入
+    // 检查是否已有系统标签
+    QSqlQuery checkQuery = executeQuery("SELECT COUNT(*) FROM tags WHERE is_system = 1");
+    if (checkQuery.next() && checkQuery.value(0).toInt() > 0) {
+        qDebug() << "系统标签已存在，跳过初始数据插入";
         return true;
     }
     
     // 插入系统默认标签
-    QStringList systemTagsData = {
-        "('我的歌曲', '所有歌曲的默认标签', 1, 1, 0, 0)",
-        "('我的收藏', '收藏的歌曲', 1, 1, 0, 1)",
-        "('最近播放', '最近播放的歌曲', 1, 1, 0, 2)"
+    const QStringList systemTags = {
+        "('流行', '#e74c3c', '流行音乐', 1)",
+        "('摇滚', '#9b59b6', '摇滚音乐', 1)",
+        "('古典', '#3498db', '古典音乐', 1)",
+        "('爵士', '#f39c12', '爵士音乐', 1)",
+        "('电子', '#1abc9c', '电子音乐', 1)",
+        "('民谣', '#27ae60', '民谣音乐', 1)",
+        "('收藏', '#e67e22', '收藏的歌曲', 1)"
     };
     
-    QString insertSql = "INSERT INTO tags (name, description, tag_type, is_system, is_deletable, sort_order) VALUES ";
-    insertSql += systemTagsData.join(", ");
-    
-    if (!query.exec(insertSql)) {
-        qCritical() << "Failed to insert system tags:" << query.lastError().text();
-        return false;
+    for (const QString& tagData : systemTags) {
+        QString insertSQL = "INSERT INTO tags (name, color, description, is_system) VALUES " + tagData;
+        if (!executeUpdate(insertSQL)) {
+            logError("插入系统标签失败: " + tagData);
+            return false;
+        }
     }
     
-    qInfo() << "System tags initialized successfully";
+    qDebug() << "初始数据插入完成";
     return true;
 }
 
 void DatabaseManager::logError(const QString& error)
 {
     m_lastError = error;
-    qWarning() << "DatabaseManager Error:" << error;
-    emit databaseError(error);
-}
-
-// SQL语句常量定义 - 待完善
-const QString DatabaseManager::SQLStatements::CREATE_SONGS_TABLE = 
-    "CREATE TABLE IF NOT EXISTS songs (...)";
-
-const QString DatabaseManager::SQLStatements::CREATE_TAGS_TABLE = 
-    "CREATE TABLE IF NOT EXISTS tags (...)";
-
-// 其他SQL语句常量将在后续实现中添加
-
-bool DatabaseManager::createSongsTable()
-{
-    QSqlQuery query(m_database);
+    qCritical() << "DatabaseManager Error:" << error;
     
-    QString createSql = R"(
-        CREATE TABLE IF NOT EXISTS songs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            file_path TEXT NOT NULL UNIQUE,
-            file_name TEXT NOT NULL,
-            title TEXT,
-            artist TEXT,
-            album TEXT,
-            duration INTEGER DEFAULT 0,
-            file_size INTEGER DEFAULT 0,
-            bit_rate INTEGER DEFAULT 0,
-            sample_rate INTEGER DEFAULT 0,
-            channels INTEGER DEFAULT 2,
-            file_format TEXT,
-            cover_path TEXT,
-            has_lyrics BOOLEAN DEFAULT 0,
-            lyrics_path TEXT,
-            play_count INTEGER DEFAULT 0,
-            last_played_time INTEGER,
-            date_added INTEGER NOT NULL,
-            date_modified INTEGER,
-            is_favorite BOOLEAN DEFAULT 0,
-            is_available BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    )";
-    
-    if (!query.exec(createSql)) {
-        qCritical() << "Failed to create songs table:" << query.lastError().text();
-        return false;
+    // 简单的错误记录，不使用弹窗避免阻塞
+    if (m_initialized && database().isOpen()) {
+        QString errorMessage = error;
+        QString logSQL = QString("INSERT INTO logs (level, message, category) VALUES ('ERROR', '%1', 'Database')")
+                        .arg(errorMessage.replace("'", "''"));
+        QSqlQuery query(database());
+        query.exec(logSQL);
     }
-    
-    // 创建索引（分别执行每条语句）
-    QStringList indexSqls = {
-        "CREATE INDEX IF NOT EXISTS idx_songs_file_path ON songs(file_path)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(title)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_album ON songs(album)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_date_added ON songs(date_added)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_play_count ON songs(play_count)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_last_played ON songs(last_played_time)",
-        "CREATE INDEX IF NOT EXISTS idx_songs_is_favorite ON songs(is_favorite)"
-    };
-    
-    for (const QString& indexSql : indexSqls) {
-        if (!query.exec(indexSql)) {
-            qCritical() << "Failed to create songs index:" << indexSql << query.lastError().text();
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-bool DatabaseManager::createTagsTable()
-{
-    QSqlQuery query(m_database);
-    
-    QString createSql = R"(
-        CREATE TABLE IF NOT EXISTS tags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            description TEXT,
-            cover_path TEXT,
-            color TEXT DEFAULT '#3498db',
-            tag_type INTEGER DEFAULT 0,
-            is_system BOOLEAN DEFAULT 0,
-            is_deletable BOOLEAN DEFAULT 1,
-            sort_order INTEGER DEFAULT 0,
-            song_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    )";
-    
-    if (!query.exec(createSql)) {
-        qCritical() << "Failed to create tags table:" << query.lastError().text();
-        return false;
-    }
-    
-    // 创建索引（分别执行每条语句）
-    QStringList indexSqls = {
-        "CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)",
-        "CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(tag_type)",
-        "CREATE INDEX IF NOT EXISTS idx_tags_sort_order ON tags(sort_order)"
-    };
-    
-    for (const QString& indexSql : indexSqls) {
-        if (!query.exec(indexSql)) {
-            qCritical() << "Failed to create tags index:" << indexSql << query.lastError().text();
-            return false;
-        }
-    }
-    
-    return true;
 }

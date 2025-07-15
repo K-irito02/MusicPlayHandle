@@ -16,6 +16,7 @@ Song::Song()
     , m_isAvailable(true)
     , m_createdAt(QDateTime::currentDateTime())
     , m_updatedAt(QDateTime::currentDateTime())
+    , m_rating(0)
 {
 }
 
@@ -38,6 +39,7 @@ Song::Song(const QString& filePath, const QString& title,
     , m_isAvailable(true)
     , m_createdAt(QDateTime::currentDateTime())
     , m_updatedAt(QDateTime::currentDateTime())
+    , m_rating(0)
 {
     // 从文件路径获取文件格式
     QFileInfo fileInfo(filePath);
@@ -77,6 +79,8 @@ Song::Song(const Song& other)
     , m_isAvailable(other.m_isAvailable)
     , m_createdAt(other.m_createdAt)
     , m_updatedAt(other.m_updatedAt)
+    , m_tags(other.m_tags)
+    , m_rating(other.m_rating)
 {
 }
 
@@ -106,6 +110,8 @@ Song& Song::operator=(const Song& other)
         m_isAvailable = other.m_isAvailable;
         m_createdAt = other.m_createdAt;
         m_updatedAt = other.m_updatedAt;
+        m_tags = other.m_tags;
+        m_rating = other.m_rating;
     }
     return *this;
 }
@@ -335,6 +341,8 @@ void Song::clear()
     m_isAvailable = true;
     m_createdAt = QDateTime::currentDateTime();
     m_updatedAt = QDateTime::currentDateTime();
+    m_tags.clear();
+    m_rating = 0;
 }
 
 bool Song::isEmpty() const
@@ -413,4 +421,4 @@ Song Song::fromFile(const QString& filePath)
     song.setIsAvailable(fileInfo.exists());
     // 其他字段如 title/artist/album 可后续通过元数据提取
     return song;
-} 
+}

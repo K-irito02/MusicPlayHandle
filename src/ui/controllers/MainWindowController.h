@@ -267,6 +267,18 @@ public slots:
     void editTagFromMainWindow(const QString& tagName);
     void deleteTag(const QString& name);
     
+    // 歌曲操作方法
+    void showAddToTagDialog(int songId, const QString& songTitle);
+    void removeFromCurrentTag(int songId, const QString& songTitle);
+    void showEditSongDialog(int songId, const QString& songTitle);
+    void showInFileExplorer(int songId, const QString& songTitle);
+    void deleteSongFromDatabase(int songId, const QString& songTitle);
+    
+    // 播放列表操作方法
+    void showCreatePlaylistDialog();
+    void importPlaylistFromFile();
+    void refreshPlaylistView();
+    
 signals:
     // 状态变化信号
     void stateChanged(MainWindowState state);
@@ -328,6 +340,9 @@ private:
     QFrame* m_songFrame;
     QFrame* m_playbackFrame;
     QLabel* m_currentSongLabel;
+    QLabel* m_currentTimeLabel;     // 当前播放时间标签
+    QLabel* m_totalTimeLabel;       // 总时长标签
+    QLabel* m_volumeLabel;          // 音量显示标签
     QSlider* m_progressSlider;
     QSlider* m_volumeSlider;
     QPushButton* m_playButton;
@@ -441,6 +456,7 @@ private:
     void logError(const QString& error);
     void logInfo(const QString& message);
     void logDebug(const QString& message);
+    void logWarning(const QString& message);
     
     // 资源管理
     void loadIcons();
@@ -457,6 +473,11 @@ private:
     bool validateSongFile(const QString& filePath) const;
     bool validateTagName(const QString& name) const;
     bool validatePlaylistName(const QString& name) const;
+    
+    // 播放列表文件解析方法
+    QStringList parseM3UPlaylist(const QString& filePath) const;
+    QStringList parsePLSPlaylist(const QString& filePath) const;
+    QStringList parseXSPFPlaylist(const QString& filePath) const;
     
     // 常量
     static const int UPDATE_INTERVAL = 100; // 100ms

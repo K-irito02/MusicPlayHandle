@@ -58,4 +58,10 @@ void TagManager::onSongChanged(int songId) { Q_UNUSED(songId); }
 void TagManager::updateStatistics() {}
 void TagManager::cleanupOrphanedTags() {}
 
-// ... 你可以根据需要继续补充其它被调用的成员函数 stub 实现 ... 
+QList<Tag> TagManager::getTagsForSong(int songId) const
+{
+    Q_UNUSED(songId)
+    return QList<Tag>();
+}
+
+// ... 你可以根据需要继续补充其它被调用的成员函数 stub 实现 ...

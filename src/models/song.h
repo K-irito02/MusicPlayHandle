@@ -8,6 +8,7 @@
 #include <QPixmap>
 #include <QJsonObject>
 #include <QMetaType>
+#include <QStringList>
 
 /**
  * @brief 歌曲数据模型类
@@ -83,6 +84,12 @@ public:
     bool isAvailable() const { return m_isAvailable; }
     QDateTime createdAt() const { return m_createdAt; }
     QDateTime updatedAt() const { return m_updatedAt; }
+    QStringList tags() const { return m_tags; }
+    int rating() const { return m_rating; }
+    QString genre() const { return m_genre; }
+    void setGenre(const QString& genre) { m_genre = genre; }
+    int year() const { return m_year; }
+    void setYear(int year) { m_year = year; }
     
     // Setters
     void setId(int id) { m_id = id; }
@@ -108,6 +115,8 @@ public:
     void setIsAvailable(bool isAvailable) { m_isAvailable = isAvailable; }
     void setCreatedAt(const QDateTime& createdAt) { m_createdAt = createdAt; }
     void setUpdatedAt(const QDateTime& updatedAt) { m_updatedAt = updatedAt; }
+    void setTags(const QStringList& tags) { m_tags = tags; }
+    void setRating(int rating) { m_rating = rating; }
     
     /**
      * @brief 检查歌曲是否有效
@@ -227,6 +236,10 @@ private:
     bool m_isAvailable;                 ///< 文件是否可用
     QDateTime m_createdAt;              ///< 创建时间
     QDateTime m_updatedAt;              ///< 更新时间
+    QStringList m_tags;                 ///< 标签列表
+    int m_rating;                       ///< 评分(0-5)
+    QString m_genre;
+    int m_year;
     
     /**
      * @brief 从文件路径提取文件名
@@ -253,4 +266,4 @@ private:
 // 使Song可以在QVariant中使用
 Q_DECLARE_METATYPE(Song)
 
-#endif // SONG_H 
+#endif // SONG_H

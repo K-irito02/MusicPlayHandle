@@ -25,31 +25,43 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
     , m_controller(nullptr)
 {
+    qDebug() << "MainWindow::MainWindow() - 开始构造主窗口";
+    
+    qDebug() << "MainWindow::MainWindow() - 设置UI";
     ui->setupUi(this);
     
     // 设置UI
+    qDebug() << "MainWindow::MainWindow() - 调用setupUI()";
     setupUI();
     
     // 创建控制器
+    qDebug() << "MainWindow::MainWindow() - 创建MainWindowController";
     m_controller = new MainWindowController(this, this);
     
     // 设置信号槽连接
+    qDebug() << "MainWindow::MainWindow() - 设置信号槽连接";
     setupConnections();
     
     // 填充默认标签
+    qDebug() << "MainWindow::MainWindow() - 填充默认标签";
     populateDefaultTags();
     
     // 初始化控制器
     if (m_controller) {
+        qDebug() << "MainWindow::MainWindow() - 初始化控制器";
         m_controller->initialize();
     }
     
     // 显示状态消息
+    qDebug() << "MainWindow::MainWindow() - 显示状态消息";
     showStatusMessage("应用程序已启动");
+    
+    qDebug() << "MainWindow::MainWindow() - 主窗口构造完成";
 }
 
 MainWindow::~MainWindow()
 {
+
     if (m_controller) {
         m_controller->shutdown();
         delete m_controller;
@@ -191,22 +203,22 @@ void MainWindow::onActionAddMusic()
 
 void MainWindow::onActionCreateTag()
 {
-    if (m_controller) {
-        m_controller->onActionCreateTag();
-    } else {
-        CreateTagDialog dialog(this);
-        if (dialog.exec() == QDialog::Accepted) {
-            QString tagName = dialog.getTagName();
-            QString imagePath = dialog.getTagImagePath();
-            if (!tagName.isEmpty()) {
+    CreateTagDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        QString tagName = dialog.getTagName();
+        QString imagePath = dialog.getTagImagePath();
+        if (!tagName.isEmpty()) {
+            if (m_controller) {
                 m_controller->addTag(tagName, imagePath);
                 showStatusMessage("标签创建请求已提交");
             } else {
-                showStatusMessage("标签名不能为空");
+                showStatusMessage("控制器未初始化");
             }
         } else {
-            showStatusMessage("已取消创建标签");
+            showStatusMessage("标签名不能为空");
         }
+    } else {
+        showStatusMessage("已取消创建标签");
     }
 }
 

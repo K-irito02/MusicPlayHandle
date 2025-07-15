@@ -27,6 +27,11 @@ TagListItem::TagListItem(const QString& tagName,
     updateEditButtonVisibility();
 }
 
+TagListItem::~TagListItem()
+{
+    // Qt会自动清理子控件，无需手动删除
+}
+
 QString TagListItem::getTagName() const
 {
     return m_tagName;

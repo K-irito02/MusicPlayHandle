@@ -43,7 +43,7 @@ QList<Tag> LazyTagList::doLoadData()
         
         // 应用过滤条件
         for (const Tag& tag : allTags) {
-            bool isSystem = Constants::SystemTags::isSystemTag(tag.getName());
+            bool isSystem = Constants::SystemTags::isSystemTag(tag.name());
             
             if (m_systemOnly && !isSystem) {
                 continue;
@@ -96,14 +96,14 @@ QList<Song> LazySongList::doLoadData()
             return songs;
         }
         
-        SongDAO songDAO(dbManager);
+        SongDao songDao;
         
         if (m_tagId == -1) {
             // 加载所有歌曲
-            songs = songDAO.getAllSongs();
+            songs = songDao.getAllSongs();
         } else {
             // 加载特定标签下的歌曲
-            songs = songDAO.getSongsByTag(m_tagId);
+            songs = songDao.getSongsByTag(m_tagId);
         }
         
         qDebug() << "LazySongList: Loaded" << songs.size() << "songs for tag" << m_tagId;

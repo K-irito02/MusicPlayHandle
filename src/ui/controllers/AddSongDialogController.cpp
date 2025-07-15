@@ -5,7 +5,9 @@
 #include "../../managers/tagmanager.h"
 #include "../../audio/audioengine.h"
 #include "../../database/databasemanager.h"
+#include "../../database/tagdao.h"
 #include "../../core/logger.h"
+#include "../../core/constants.h"
 
 #include <QDebug>
 #include <QFile>
@@ -575,9 +577,8 @@ void AddSongDialogController::updateTagList()
     
     // 添加所有标签到列表
     for (const TagInfo& tagInfo : m_tagInfoList) {
-        // 判断是否为系统标签
-        QStringList systemTags = {"我的歌曲", "我的收藏", "最近播放"};
-        bool isSystemTag = systemTags.contains(tagInfo.name);
+        // 使用Constants中定义的系统标签判断
+        bool isSystemTag = Constants::SystemTags::isSystemTag(tagInfo.name);
         
         // 创建TagListItem自定义控件
         TagListItem* tagWidget = new TagListItem(tagInfo.name, tagInfo.iconPath, !isSystemTag, !isSystemTag);
@@ -658,9 +659,9 @@ void AddSongDialogController::logError(const QString& error) const
     qCritical() << "AddSongDialogController Error:" << error;
 }
 
-void AddSongDialogController::logDebug(const QString& message)
+void AddSongDialogController::logDebug(const QString& message) const
 {
-    qDebug() << "AddSongDialogController:" << message;
+    qDebug() << "AddSongDialogController Debug:" << message;
 }
 
 QString AddSongDialogController::formatFileSize(qint64 bytes) const
@@ -1622,12 +1623,27 @@ QStringList AddSongDialogController::getSelectedFiles() const
     QStringList selectedFiles;
     
     if (!m_dialog) {
+        logError("Dialog is null in getSelectedFiles");
         return selectedFiles;
     }
     
-    // TODO: 实现获取选中文件的逻辑
-    // 这里应该从UI控件中获取用户选中的文件
+    // 获取文件列表控件
+    QListWidget* fileListWidget = m_dialog->findChild<QListWidget*>("listWidget_added_songs");
+    if (!fileListWidget) {
+        logError("找不到文件列表控件 listWidget_added_songs");
+        return selectedFiles;
+    }
     
+    // 获取选中的项目
+    QList<QListWidgetItem*> selectedItems = fileListWidget->selectedItems();
+    for (QListWidgetItem* item : selectedItems) {
+        QString filePath = item->data(Qt::UserRole).toString();
+        if (!filePath.isEmpty()) {
+            selectedFiles.append(filePath);
+        }
+    }
+    
+    logDebug(QString("获取到 %1 个选中文件").arg(selectedFiles.size()));
     return selectedFiles;
 }
 
@@ -1787,8 +1803,79 @@ void AddSongDialogController::deleteTagFromDatabase(const QString& tagName)
 {
     logInfo(QString("Deleting tag from database: %1").arg(tagName));
     
-    // TODO: 实现从数据库删除标签的逻辑
-    // 目前只记录日志
+    if (!m_databaseManager || !m_databaseManager->isValid()) {
+        logError("Database manager not available, cannot delete tag");
+        emit errorOccurred("数据库不可用，无法删除标签");
+        return;
+    }
+    
+    if (tagName.trimmed().isEmpty()) {
+        logError("Tag name cannot be empty");
+        emit warningOccurred("标签名不能为空");
+        return;
+    }
+    
+    try {
+        // 使用TagDao删除标签
+        TagDao tagDao;
+        
+        // 先获取标签信息
+        Tag tag = tagDao.getTagByName(tagName);
+        if (!tag.isValid()) {
+            logWarning(QString("Tag not found: %1").arg(tagName));
+            emit warningOccurred(QString("标签 '%1' 不存在").arg(tagName));
+            return;
+        }
+        
+        // 检查是否为系统标签
+        if (tag.isSystem()) {
+            logError(QString("Cannot delete system tag: %1").arg(tagName));
+            emit errorOccurred("不能删除系统标签");
+            return;
+        }
+        
+        // 确认删除
+        if (m_dialog) {
+            int ret = QMessageBox::question(m_dialog, "确认删除", 
+                QString("确定要删除标签 '%1' 吗？\n\n删除后该标签的所有关联将被移除。")
+                .arg(tagName),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            
+            if (ret != QMessageBox::Yes) {
+                logInfo("Tag deletion cancelled by user");
+                return;
+            }
+        }
+        
+        // 执行删除
+        if (tagDao.deleteTag(tag.id())) {
+            logInfo(QString("Tag deleted successfully: %1").arg(tagName));
+            
+            // 从本地标签列表中移除
+            for (int i = 0; i < m_tagInfoList.size(); ++i) {
+                if (m_tagInfoList[i].name == tagName) {
+                    m_tagInfoList.removeAt(i);
+                    break;
+                }
+            }
+            
+            // 刷新标签列表
+            loadTagsFromDatabase();
+            
+            emit tagDeleted(tagName);
+            emit operationCompleted(QString("标签 '%1' 删除成功").arg(tagName), true);
+        } else {
+            logError(QString("Failed to delete tag: %1").arg(tagName));
+            emit errorOccurred(QString("删除标签 '%1' 失败").arg(tagName));
+        }
+        
+    } catch (const std::exception& e) {
+        logError(QString("Exception in deleteTagFromDatabase: %1").arg(e.what()));
+        emit errorOccurred(QString("删除标签时发生错误: %1").arg(e.what()));
+    } catch (...) {
+        logError("Unknown exception in deleteTagFromDatabase");
+        emit errorOccurred("删除标签时发生未知错误");
+    }
 }
 
 TagInfo AddSongDialogController::createDefaultTagInfo(const QString& name)

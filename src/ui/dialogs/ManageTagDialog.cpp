@@ -10,6 +10,9 @@
 #include <QSqlError>
 #include <QMessageBox>
 #include <QSqlDatabase>
+#include <QTimer>
+#include <QStatusBar>
+#include <QApplication>
 #include "../../database/databasemanager.h"
 
 ManageTagDialog::ManageTagDialog(QWidget *parent)
@@ -73,6 +76,11 @@ QList<ManageTagDialog::SongMove> ManageTagDialog::getSongMoves() const
     return m_songMoves;
 }
 
+QListWidget* ManageTagDialog::getSongListWidget()
+{
+    return songList;
+}
+
 void ManageTagDialog::setupConnections()
 {
     // 设置信号连接
@@ -105,20 +113,349 @@ void ManageTagDialog::updateSongList()
 
 void ManageTagDialog::loadSongsForTag(const QString& tag)
 {
-    // 加载指定标签的歌曲
-    Q_UNUSED(tag)
+    qDebug() << "ManageTagDialog::loadSongsForTag called with tag:" << tag;
+    
+    if (tag.isEmpty()) {
+        qDebug() << "Tag name is empty, clearing song list";
+        songList->clear();
+        selectedSongIds.clear();
+        updateButtonStates();
+        return;
+    }
+    
+    try {
+        // 清空当前歌曲列表
+        songList->clear();
+        selectedSongIds.clear();
+        
+        // 通过控制器加载指定标签的歌曲
+        if (m_controller) {
+            qDebug() << "Loading songs for tag through controller:" << tag;
+            
+            // 获取标签下的所有歌曲
+            SongDao songDao;
+            TagDao tagDao;
+            
+            // 首先获取标签ID
+            Tag tagInfo = tagDao.getTagByName(tag);
+            if (tagInfo.id() <= 0) {
+                qDebug() << "Tag not found:" << tag;
+                showStatusMessage(QString("标签 '%1' 不存在").arg(tag));
+                return;
+            }
+            
+            // 获取该标签下的所有歌曲
+            QList<Song> songs = songDao.getSongsByTag(tagInfo.id());
+            qDebug() << "Found" << songs.size() << "songs for tag:" << tag;
+            
+            // 添加歌曲到列表
+            for (const Song& song : songs) {
+                QListWidgetItem* item = new QListWidgetItem();
+                
+                // 设置显示文本
+                QString displayText = QString("%1 - %2")
+                    .arg(song.artist().isEmpty() ? "未知艺术家" : song.artist())
+                    .arg(song.title().isEmpty() ? "未知标题" : song.title());
+                
+                if (!song.album().isEmpty()) {
+                    displayText += QString(" [%1]").arg(song.album());
+                }
+                
+                item->setText(displayText);
+                item->setData(Qt::UserRole, song.id());
+                item->setToolTip(QString("文件路径: %1\n时长: %2")
+                    .arg(song.filePath())
+                    .arg(formatDuration(song.duration())));
+                
+                songList->addItem(item);
+            }
+            
+            // 更新状态消息
+            showStatusMessage(QString("已加载标签 '%1' 下的 %2 首歌曲").arg(tag).arg(songs.size()));
+            
+        } else {
+            qDebug() << "Controller is null, cannot load songs";
+            showStatusMessage("控制器未初始化，无法加载歌曲");
+        }
+        
+        // 更新按钮状态
+        updateButtonStates();
+        
+    } catch (const std::exception& e) {
+        qDebug() << "Exception in loadSongsForTag:" << e.what();
+        showStatusMessage(QString("加载歌曲时发生错误: %1").arg(e.what()));
+    } catch (...) {
+        qDebug() << "Unknown exception in loadSongsForTag";
+        showStatusMessage("加载歌曲时发生未知错误");
+    }
+}
+
+// 辅助方法：格式化时长
+QString ManageTagDialog::formatDuration(qint64 duration) const
+{
+    if (duration <= 0) {
+        return "00:00";
+    }
+    
+    int seconds = static_cast<int>(duration / 1000);
+    int minutes = seconds / 60;
+    seconds = seconds % 60;
+    
+    if (minutes >= 60) {
+        int hours = minutes / 60;
+        minutes = minutes % 60;
+        return QString("%1:%2:%3")
+            .arg(hours)
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0'));
+    } else {
+        return QString("%1:%2")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0'));
+    }
 }
 
 void ManageTagDialog::performTransfer(bool isCopy)
 {
-    // 执行歌曲传输
-    Q_UNUSED(isCopy)
+    qDebug() << "ManageTagDialog::performTransfer called, isCopy:" << isCopy;
+    
+    // 检查是否有选中的源标签、歌曲和目标标签
+    if (selectedSourceTagIds.isEmpty()) {
+        showStatusMessage("请先选择源标签");
+        QMessageBox::warning(this, "操作无效", "请先选择源标签！");
+        return;
+    }
+    
+    if (selectedSongIds.isEmpty()) {
+        showStatusMessage("请先选择要转移的歌曲");
+        QMessageBox::warning(this, "操作无效", "请先选择要转移的歌曲！");
+        return;
+    }
+    
+    if (selectedTargetTagIds.isEmpty()) {
+        showStatusMessage("请先选择目标标签");
+        QMessageBox::warning(this, "操作无效", "请先选择目标标签！");
+        return;
+    }
+    
+    try {
+        // 获取操作描述
+        QString operationType = isCopy ? "复制" : "移动";
+        int songCount = selectedSongIds.size();
+        int sourceTagCount = selectedSourceTagIds.size();
+        int targetTagCount = selectedTargetTagIds.size();
+        
+        qDebug() << QString("Performing %1 operation: %2 songs from %3 source tags to %4 target tags")
+                    .arg(operationType).arg(songCount).arg(sourceTagCount).arg(targetTagCount);
+        
+        // 确认操作
+        QString confirmMessage = QString("确定要%1 %2 首歌曲从 %3 个源标签到 %4 个目标标签吗？")
+                                .arg(operationType)
+                                .arg(songCount)
+                                .arg(sourceTagCount)
+                                .arg(targetTagCount);
+        
+        if (!isCopy) {
+            confirmMessage += "\n\n注意：移动操作将从源标签中移除这些歌曲！";
+        }
+        
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this, 
+            QString("%1歌曲确认").arg(operationType),
+            confirmMessage,
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+        
+        if (reply != QMessageBox::Yes) {
+            showStatusMessage(QString("已取消%1操作").arg(operationType));
+            return;
+        }
+        
+        // 记录操作到历史栈（用于撤销）
+        Operation::Type opType = isCopy ? Operation::Copy : Operation::Move;
+        recordOperation(opType, selectedSongIds.values(), selectedSourceTagIds, selectedTargetTagIds);
+        
+        // 执行实际的转移操作
+        bool success = true;
+        int successCount = 0;
+        int failureCount = 0;
+        
+        if (m_controller) {
+            // 通过控制器执行转移操作
+            for (int sourceTagId : selectedSourceTagIds) {
+                for (int targetTagId : selectedTargetTagIds) {
+                    try {
+                        // 获取标签名称
+                        TagDao tagDao;
+                        Tag sourceTag = tagDao.getTagById(sourceTagId);
+                        Tag targetTag = tagDao.getTagById(targetTagId);
+                        
+                        if (sourceTag.id() <= 0 || targetTag.id() <= 0) {
+                            qDebug() << "Invalid tag ID found";
+                            failureCount++;
+                            continue;
+                        }
+                        
+                        // 调用控制器的转移方法
+                        // 需要通过公共接口调用transfer操作
+m_controller->transferSongs(sourceTag.name(), targetTag.name(), isCopy);
+                        successCount++;
+                        
+                        qDebug() << QString("Successfully %1 songs from '%2' to '%3'")
+                                    .arg(isCopy ? "copied" : "moved")
+                                    .arg(sourceTag.name())
+                                    .arg(targetTag.name());
+                        
+                    } catch (const std::exception& e) {
+                        qDebug() << "Exception during transfer:" << e.what();
+                        failureCount++;
+                        success = false;
+                    }
+                }
+            }
+        } else {
+            qDebug() << "Controller is null, cannot perform transfer";
+            showStatusMessage("控制器未初始化，无法执行转移操作");
+            return;
+        }
+        
+        // 更新状态消息
+        if (success && failureCount == 0) {
+            showStatusMessage(QString("成功%1 %2 首歌曲").arg(operationType).arg(songCount));
+            QMessageBox::information(this, "操作成功", 
+                QString("成功%1 %2 首歌曲到目标标签").arg(operationType).arg(songCount));
+        } else {
+            QString resultMessage = QString("%1操作完成：成功 %2 次，失败 %3 次")
+                                   .arg(operationType).arg(successCount).arg(failureCount);
+            showStatusMessage(resultMessage);
+            
+            if (failureCount > 0) {
+                QMessageBox::warning(this, "操作部分失败", resultMessage);
+            }
+        }
+        
+        // 刷新界面
+        if (m_controller) {
+            m_controller->refreshData();
+        }
+        
+        // 清空选择
+        selectedSongIds.clear();
+        songList->clearSelection();
+        
+        // 更新按钮状态
+        updateButtonStates();
+        
+    } catch (const std::exception& e) {
+        qDebug() << "Exception in performTransfer:" << e.what();
+        showStatusMessage(QString("转移操作时发生错误: %1").arg(e.what()));
+        QMessageBox::critical(this, "操作错误", QString("转移操作时发生错误:\n%1").arg(e.what()));
+    } catch (...) {
+        qDebug() << "Unknown exception in performTransfer";
+        showStatusMessage("转移操作时发生未知错误");
+        QMessageBox::critical(this, "操作错误", "转移操作时发生未知错误");
+    }
 }
 
 void ManageTagDialog::showStatusMessage(const QString& message)
 {
-    // 显示状态消息
-    Q_UNUSED(message)
+    qDebug() << "ManageTagDialog::showStatusMessage:" << message;
+    
+    if (message.isEmpty()) {
+        return;
+    }
+    
+    try {
+        // 查找状态栏或状态标签
+        QLabel* statusLabel = findChild<QLabel*>("label_status");
+        if (!statusLabel) {
+            // 如果没有专门的状态标签，尝试查找其他可用的标签
+            statusLabel = findChild<QLabel*>("label_song_list");
+        }
+        
+        if (statusLabel) {
+            // 保存原始文本（如果是第一次设置状态消息）
+            QString originalText = statusLabel->text();
+            if (originalText.isEmpty() && !statusLabel->text().contains("状态:")) {
+                originalText = statusLabel->text();
+            }
+            
+            // 设置状态消息
+            QString statusText = QString("状态: %1").arg(message);
+            statusLabel->setText(statusText);
+            statusLabel->setStyleSheet("QLabel { color: #00ff00; font-weight: bold; }");
+            
+            qDebug() << "Status message displayed in label:" << message;
+            
+            // 创建定时器，3秒后恢复原始文本
+            QTimer* timer = new QTimer(this);
+            timer->setSingleShot(true);
+            timer->setInterval(3000); // 3秒
+            
+            connect(timer, &QTimer::timeout, [statusLabel, originalText, timer]() {
+                if (statusLabel && !originalText.isEmpty()) {
+                    statusLabel->setText(originalText);
+                    statusLabel->setStyleSheet(""); // 恢复默认样式
+                }
+                timer->deleteLater();
+            });
+            
+            timer->start();
+            
+        } else {
+            // 如果找不到状态标签，使用窗口标题显示状态
+            QString originalTitle = windowTitle();
+            if (!originalTitle.contains(" - ")) {
+                setWindowTitle(QString("%1 - %2").arg(originalTitle).arg(message));
+                
+                // 创建定时器，3秒后恢复原始标题
+                QTimer* timer = new QTimer(this);
+                timer->setSingleShot(true);
+                timer->setInterval(3000);
+                
+                connect(timer, &QTimer::timeout, [this, originalTitle, timer]() {
+                    setWindowTitle(originalTitle);
+                    timer->deleteLater();
+                });
+                
+                timer->start();
+                
+                qDebug() << "Status message displayed in window title:" << message;
+            }
+        }
+        
+        // 同时在应用程序状态栏显示消息（如果存在）
+        if (QApplication::instance()) {
+            QWidget* mainWindow = nullptr;
+            for (QWidget* widget : QApplication::topLevelWidgets()) {
+                if (widget->objectName() == "MainWindow" || 
+                    widget->inherits("QMainWindow")) {
+                    mainWindow = widget;
+                    break;
+                }
+            }
+            
+            if (mainWindow) {
+                QStatusBar* statusBar = mainWindow->findChild<QStatusBar*>();
+                if (statusBar) {
+                    statusBar->showMessage(message, 3000); // 显示3秒
+                    qDebug() << "Status message displayed in main window status bar:" << message;
+                }
+            }
+        }
+        
+        // 强制刷新界面
+        QApplication::processEvents();
+        
+    } catch (const std::exception& e) {
+        qDebug() << "Exception in showStatusMessage:" << e.what();
+        // 如果出现异常，至少在调试输出中显示消息
+        qDebug() << "Fallback status message:" << message;
+    } catch (...) {
+        qDebug() << "Unknown exception in showStatusMessage";
+        qDebug() << "Fallback status message:" << message;
+    }
 }
 
 QString ManageTagDialog::getSelectedTag1() const
@@ -142,6 +479,8 @@ QStringList ManageTagDialog::getSelectedSongs() const
 // 槽函数实现
 void ManageTagDialog::onSourceTagSelectionChanged()
 {
+    qDebug() << "ManageTagDialog::onSourceTagSelectionChanged called";
+    
     // 获取选中的源标签ID
     selectedSourceTagIds.clear();
     QList<QListWidgetItem*> selected = tagListSource->selectedItems();
@@ -166,18 +505,34 @@ void ManageTagDialog::onSourceTagSelectionChanged()
         }
     }
     
-    // 只显示第一个选中标签的歌曲
-    songList->clear();
-    if (!selectedSourceTagIds.isEmpty()) {
-        int tagId = *selectedSourceTagIds.begin();
-        SongDao songDao;
-        QList<Song> songs = songDao.getSongsByTag(tagId);
-        for (const Song& song : songs) {
-            QListWidgetItem* songItem = new QListWidgetItem(song.title());
-            songItem->setData(Qt::UserRole, song.id());
-            songList->addItem(songItem);
+    // 根据选中的标签加载歌曲
+    if (!selected.isEmpty()) {
+        // 如果选中了标签，加载第一个选中标签的歌曲
+        QListWidgetItem* firstSelected = selected.first();
+        TagListItem* tagWidget = qobject_cast<TagListItem*>(tagListSource->itemWidget(firstSelected));
+        QString tagName;
+        if (tagWidget) {
+            tagName = tagWidget->getTagName();
+        } else {
+            // 如果没有自定义控件，使用item的文本
+            tagName = firstSelected->text();
         }
+        
+        qDebug() << "Loading songs for selected tag:" << tagName;
+        loadSongsForTag(tagName);
+        
+        // 显示状态消息
+        showStatusMessage(QString("已选择源标签: %1").arg(tagName));
+    } else {
+        // 如果没有选中标签，清空歌曲列表
+        qDebug() << "No source tag selected, clearing song list";
+        songList->clear();
+        selectedSongIds.clear();
+        showStatusMessage("请选择源标签以查看歌曲");
     }
+    
+    // 更新按钮状态
+    updateButtonStates();
 }
 
 void ManageTagDialog::onSongSelectionChanged()
@@ -222,8 +577,8 @@ void ManageTagDialog::showEvent(QShowEvent* event)
     tagListSource->clear();
     tagListTarget->clear();
     
-    // 使用正确的TagDAO构造方式
-    TagDAO tagDao(DatabaseManager::instance());
+    // 使用正确的TagDao构造方式
+    TagDao tagDao;
     QList<Tag> tags = tagDao.getAllTags();
     
     // 歌曲标签列表（被转移）：包含所有标签（包括"我的歌曲"）
@@ -367,24 +722,18 @@ void ManageTagDialog::commitAllOperations()
 
 void ManageTagDialog::onCopySongs()
 {
-    if (selectedSourceTagIds.isEmpty() || selectedSongIds.isEmpty() || selectedTargetTagIds.isEmpty()) {
-        QMessageBox::warning(this, tr("操作无效"), tr("请先选择源标签、歌曲和目标标签！"));
-        return;
-    }
-    // 仅记录操作，不直接写数据库
-    recordOperation(Operation::Copy, selectedSongIds.values(), selectedSourceTagIds, selectedTargetTagIds);
-    QMessageBox::information(this, tr("操作已暂存"), tr("复制操作已加入待保存队列，点击保存后生效。"));
+    qDebug() << "ManageTagDialog::onCopySongs called";
+    
+    // 调用通用的转移方法，isCopy=true表示复制操作
+    performTransfer(true);
 }
 
 void ManageTagDialog::onMoveSongs()
 {
-    if (selectedSourceTagIds.isEmpty() || selectedSongIds.isEmpty() || selectedTargetTagIds.isEmpty()) {
-        QMessageBox::warning(this, tr("操作无效"), tr("请先选择源标签、歌曲和目标标签！"));
-        return;
-    }
-    // 仅记录操作，不直接写数据库
-    recordOperation(Operation::Move, selectedSongIds.values(), selectedSourceTagIds, selectedTargetTagIds);
-    QMessageBox::information(this, tr("操作已暂存"), tr("移动操作已加入待保存队列，点击保存后生效。"));
+    qDebug() << "ManageTagDialog::onMoveSongs called";
+    
+    // 调用通用的转移方法，isCopy=false表示移动操作
+    performTransfer(false);
 }
 
 void ManageTagDialog::onUndo()

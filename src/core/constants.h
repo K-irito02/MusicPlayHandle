@@ -16,9 +16,9 @@ namespace Constants {
      */
     namespace SystemTags {
         const QString MY_SONGS = QStringLiteral("我的歌曲");
-        const QString DEFAULT_TAG = QStringLiteral("默认标签");
-        const QString FAVORITES = QStringLiteral("收藏");
+        const QString FAVORITES = QStringLiteral("我的收藏");
         const QString RECENT_PLAYED = QStringLiteral("最近播放");
+        const QString DEFAULT_TAG = QStringLiteral("默认标签");
         
         /**
          * @brief 获取所有系统标签
@@ -51,6 +51,7 @@ namespace Constants {
         const QString TABLE_TAGS = QStringLiteral("tags");
         const QString TABLE_SONG_TAGS = QStringLiteral("song_tags");
         const QString TABLE_PLAYLISTS = QStringLiteral("playlists");
+        const QString TABLE_PLAYLIST_SONGS = QStringLiteral("playlist_songs");
         const QString TABLE_PLAY_HISTORY = QStringLiteral("play_history");
         const QString TABLE_LOGS = QStringLiteral("logs");
         const QString TABLE_ERROR_LOGS = QStringLiteral("error_logs");
@@ -124,7 +125,7 @@ namespace Constants {
         const QString NAME = QStringLiteral("Music Player");
         const QString VERSION = QStringLiteral("1.0.0");
         const QString ORGANIZATION = QStringLiteral("Qt Music Player");
-        const QString DOMAIN = QStringLiteral("qtmusicplayer.com");
+        const QString APP_DOMAIN = QStringLiteral("qtmusicplayer.com");
         const QString DESCRIPTION = QStringLiteral("A Qt6-based music player application");
     }
     

@@ -111,8 +111,14 @@ void AppConfig::setLanguage(const QString& language)
 
 QString AppConfig::databasePath() const
 {
+    qDebug() << "AppConfig::databasePath() - 开始获取数据库路径";
     QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    return QDir(dataDir).filePath("musicPlayer.db");
+    qDebug() << "AppConfig::databasePath() - 应用数据目录:" << dataDir;
+    
+    QString dbPath = QDir(dataDir).filePath("musicPlayer.db");
+    qDebug() << "AppConfig::databasePath() - 数据库完整路径:" << dbPath;
+    
+    return dbPath;
 }
 
 QString AppConfig::cacheDirectory() const
@@ -214,4 +220,4 @@ void AppConfig::ensureDirectoryExists(const QString& path)
             qWarning() << "无法创建目录:" << path;
         }
     }
-} 
+}

@@ -211,7 +211,7 @@ public slots:
     void onMuteButtonClicked();
     void onDisplayModeClicked();
     void onVisualizationTypeClicked();
-    void onEqualizerSliderChanged(int value);
+    void onEqualizerSliderChanged(const QVector<int>& values);
     void onLyricClicked(qint64 timestamp);
 
 private slots:
@@ -245,9 +245,10 @@ private:
     
     // 可视化数据
     VisualizationData m_visualizationData;
-    QVector<float> m_waveformHistory;
-    QVector<float> m_spectrumHistory;
+    QVector<QVector<float>> m_waveformHistory;
+    QVector<QVector<float>> m_spectrumHistory;
     bool m_visualizationEnabled;
+    QMutex m_visualizationMutex;
     
     // 均衡器
     QVector<int> m_equalizerValues;
@@ -298,6 +299,7 @@ private:
     void drawOscilloscope(const QVector<float>& data);
     void drawBars(const QVector<float>& data);
     void drawParticles(const QVector<float>& data);
+    void drawSingleVUMeter(float x, float y, float width, float height, float level, const QString& label);
     
     // 歌词处理
     void parseLyrics(const QString& lyricText);
@@ -328,6 +330,8 @@ private:
     float calculatePeak(const QVector<float>& data) const;
     QPixmap createDefaultCover() const;
     QString findLyricFile(const Song& song) const;
+    void updateVisualizationHistory(const QVector<float>& newData);
+    void calculateSpectrumStatistics(const QVector<float>& spectrum);
     QString findCoverFile(const Song& song) const;
     
     // 错误处理
@@ -348,4 +352,4 @@ private:
     static constexpr float PEAK_HOLD_TIME = 1000.0f; // ms
 };
 
-#endif // PLAYINTERFACECONTROLLER_H 
+#endif // PLAYINTERFACECONTROLLER_H

@@ -8,7 +8,7 @@
 #include <QObject>
 #include <QMutex>
 #include <QMutexLocker>
-#include <QDebug>
+
 
 ApplicationManager* ApplicationManager::m_instance = nullptr;
 QMutex ApplicationManager::m_instanceMutex;
@@ -67,35 +67,57 @@ void ApplicationManager::cleanup()
     }
 }
 
+#include <QDebug>
+
 bool ApplicationManager::initialize(QApplication* app, int argc, char* argv[])
 {
+    qDebug() << "ApplicationManager::initialize() - 开始初始化";
+    
     Q_UNUSED(argc)
     Q_UNUSED(argv)
     if (m_initialized) {
+        qDebug() << "ApplicationManager::initialize() - 已经初始化，直接返回";
         return true;
     }
 
     m_app = app;
     m_state = ApplicationState::Initializing;
+    qDebug() << "ApplicationManager::initialize() - 状态设置为 Initializing";
     
     try {
         // 初始化核心组件
+        qDebug() << "ApplicationManager::initialize() - 开始初始化核心组件";
         initializeCore();
+        qDebug() << "ApplicationManager::initialize() - 核心组件初始化完成";
         
         // 初始化数据库
+        qDebug() << "ApplicationManager::initialize() - 开始初始化数据库";
         initializeDatabase();
+        qDebug() << "ApplicationManager::initialize() - 数据库初始化完成";
         
         // 初始化其他组件
+        qDebug() << "ApplicationManager::initialize() - 开始初始化其他组件";
         initializeComponents();
+        qDebug() << "ApplicationManager::initialize() - 其他组件初始化完成";
         
         // 初始化UI
+        qDebug() << "ApplicationManager::initialize() - 开始初始化UI";
         initializeUI();
+        qDebug() << "ApplicationManager::initialize() - UI初始化完成";
         
         m_initialized = true;
         m_state = ApplicationState::Running;
+        qDebug() << "ApplicationManager::initialize() - 初始化成功完成";
         
         return true;
     } catch (const std::exception& e) {
+        QString error = QString("初始化失败: %1").arg(e.what());
+        qCritical() << "ApplicationManager::initialize() - 捕获到异常:" << error;
+        m_state = ApplicationState::Error;
+        return false;
+    } catch (...) {
+        QString error = "初始化失败: 未知错误";
+        qCritical() << "ApplicationManager::initialize() - 捕获到未知异常:" << error;
         m_state = ApplicationState::Error;
         return false;
     }
@@ -103,15 +125,21 @@ bool ApplicationManager::initialize(QApplication* app, int argc, char* argv[])
 
 bool ApplicationManager::start()
 {
+    qDebug() << "ApplicationManager::start() - 开始启动应用程序";
+    
     if (!m_initialized) {
+        qDebug() << "ApplicationManager::start() - 应用程序未初始化，启动失败";
         return false;
     }
     
-    if (m_mainWindow) {
-        m_mainWindow->show();
+    if (m_running) {
+        qDebug() << "ApplicationManager::start() - 应用程序已在运行";
+        return true;
     }
     
     m_running = true;
+    qDebug() << "ApplicationManager::start() - 应用程序启动成功";
+    
     return true;
 }
 
@@ -166,12 +194,27 @@ void ApplicationManager::initializeCore()
 
 void ApplicationManager::initializeDatabase()
 {
+    qDebug() << "ApplicationManager::initializeDatabase() - 开始初始化数据库管理器";
+    
+    qDebug() << "ApplicationManager::initializeDatabase() - 获取DatabaseManager实例";
     m_databaseManager = DatabaseManager::instance();
-    QString dbPath = AppConfig::instance()->databasePath();
-    if (!m_databaseManager->initialize(dbPath)) {
-        qCritical() << "数据库初始化失败:" << m_databaseManager->lastError();
-        // 可选：弹窗或设置错误状态
+    if (!m_databaseManager) {
+        qCritical() << "ApplicationManager::initializeDatabase() - 获取DatabaseManager实例失败";
+        throw std::runtime_error("Failed to get DatabaseManager instance");
     }
+    qDebug() << "ApplicationManager::initializeDatabase() - DatabaseManager实例获取成功";
+    
+    qDebug() << "ApplicationManager::initializeDatabase() - 获取数据库路径";
+    QString dbPath = AppConfig::instance()->databasePath();
+    qDebug() << "ApplicationManager::initializeDatabase() - 数据库路径:" << dbPath;
+    
+    qDebug() << "ApplicationManager::initializeDatabase() - 调用DatabaseManager::initialize";
+    if (!m_databaseManager->initialize(dbPath)) {
+        QString error = QString("数据库初始化失败: %1").arg(m_databaseManager->lastError());
+        qCritical() << "ApplicationManager::initializeDatabase() - 数据库初始化失败:" << error;
+        throw std::runtime_error(error.toStdString());
+    }
+    qDebug() << "ApplicationManager::initializeDatabase() - 数据库初始化成功";
 }
 
 void ApplicationManager::initializeComponents()
@@ -181,10 +224,27 @@ void ApplicationManager::initializeComponents()
 
 void ApplicationManager::initializeUI()
 {
+    qDebug() << "ApplicationManager::initializeUI() - 开始创建主窗口";
+    
     m_mainWindow = new MainWindow();
+    if (m_mainWindow) {
+        qDebug() << "ApplicationManager::initializeUI() - 主窗口创建成功，准备显示";
+        m_mainWindow->show();
+        qDebug() << "ApplicationManager::initializeUI() - 主窗口显示完成";
+    } else {
+        qDebug() << "ApplicationManager::initializeUI() - 主窗口创建失败";
+        logError("Failed to create MainWindow instance");
+    }
 }
 
 // 槽函数实现
+void ApplicationManager::logError(const QString& message)
+{
+    if (m_logger) {
+        m_logger->error(message);
+    }
+}
+
 void ApplicationManager::onInitializationTimer()
 {
     // 初始化定时器超时处理
@@ -233,4 +293,4 @@ void ApplicationManager::onAboutToQuit()
 {
     // 应用程序即将退出处理
     shutdown();
-} 
+}

@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFileInfo>
+#include <QStringConverter>
 #include <QRegularExpression>
 
 // 日志类别定义
@@ -106,7 +107,7 @@ void StructuredLogger::initialize(const QString& logDir, qint64 maxFileSize, int
     m_logFile = new QFile(m_currentLogFile);
     if (m_logFile->open(QIODevice::WriteOnly | QIODevice::Append)) {
         m_logStream = new QTextStream(m_logFile);
-        m_logStream->setCodec("UTF-8");
+        m_logStream->setEncoding(QStringConverter::Utf8);
     } else {
         qWarning() << "Failed to open log file:" << m_currentLogFile;
         m_fileOutput = false;
@@ -263,7 +264,7 @@ void StructuredLogger::rotateLogFile()
     m_logFile = new QFile(m_currentLogFile);
     if (m_logFile->open(QIODevice::WriteOnly | QIODevice::Append)) {
         m_logStream = new QTextStream(m_logFile);
-        m_logStream->setCodec("UTF-8");
+        m_logStream->setEncoding(QStringConverter::Utf8);
         
         // 记录轮转日志
         LogEntry entry;

@@ -36,6 +36,11 @@ public:
                         bool isEditable = true,
                         bool isDeletable = true,
                         QWidget *parent = nullptr);
+    
+    /**
+     * @brief 析构函数
+     */
+    ~TagListItem();
 
     /**
      * @brief 获取标签名称

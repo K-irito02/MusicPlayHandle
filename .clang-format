@@ -1,5 +1,5 @@
 # .clang-format
-# Qt6/C++11专家团队代码格式化配置
+# Qt6/C++17专家团队代码格式化配置
 # 基于Qt代码风格和现代C++最佳实践
 
 # 基础配置
@@ -47,7 +47,10 @@ AllowShortBlocksOnASingleLine: Empty
 AllowShortLambdasOnASingleLine: Inline
 
 # 参数和初始化列表
-BinPackArguments: false
+# 现代C++17特性
+Standard: c++17
+AllowAllParametersOfDeclarationOnNextLine: false  # 更严格的参数换行
+BinPackArguments: false  # 不打包参数
 BinPackParameters: false
 BreakConstructorInitializers: BeforeColon
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
@@ -129,17 +132,25 @@ SpacesBeforeTrailingComments: 2
 # 保持Qt的信号槽连接在一行
 AllowShortFunctionsOnASingleLine: Inline
 
+# 添加Qt宏处理
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - Q_FOREACH_REVERSE
+  - BOOST_FOREACH
+
 # 模板配置
+# 结构化绑定格式化
+SpaceBeforeCpp11BracedList: true
+
+# 模板代码风格
 AlwaysBreakTemplateDeclarations: Yes
+PenaltyBreakTemplateDeclaration: 10
 BreakBeforeTemplateDeclarations: true
 
 # 注释格式化
 CommentPragmas: '^ IWYU pragma:'
 DisableFormat: false
-ForEachMacros:
-  - foreach
-  - Q_FOREACH
-  - BOOST_FOREACH
 
 # 原始字符串格式化
 RawStringFormats:

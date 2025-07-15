@@ -59,20 +59,27 @@ int main(int argc, char *argv[])
     
     parser.process(app);
     
+    qDebug() << "main() - 程序开始执行";
+    
     // 初始化应用程序管理器
+    qDebug() << "main() - 获取ApplicationManager实例";
     ApplicationManager* appManager = ApplicationManager::instance();
     
     // 设置调试模式
     if (parser.isSet(debugOption)) {
+        qDebug() << "main() - 启用调试模式";
         appManager->enableDebugMode(true);
         appManager->enableDeveloperMode(true);
     }
     
     // 初始化应用程序
+    qDebug() << "main() - 开始初始化应用程序";
     if (!appManager->initialize(&app, argc, argv)) {
+        qDebug() << "main() - 应用程序初始化失败";
         QMessageBox::critical(nullptr, "错误", "应用程序初始化失败");
         return -1;
     }
+    qDebug() << "main() - 应用程序初始化成功";
     
     // 如果是测试模式，运行测试
     if (parser.isSet(testOption)) {
@@ -82,10 +89,13 @@ int main(int argc, char *argv[])
     }
     
     // 启动应用程序
+    qDebug() << "main() - 开始启动应用程序";
     if (!appManager->start()) {
+        qDebug() << "main() - 应用程序启动失败";
         QMessageBox::critical(nullptr, "错误", "应用程序启动失败");
         return -1;
     }
+    qDebug() << "main() - 应用程序启动成功";
     
     // 运行主事件循环
     int result = app.exec();

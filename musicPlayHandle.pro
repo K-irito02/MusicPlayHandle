@@ -26,9 +26,12 @@ SOURCES += \
     src/ui/controllers/PlayInterfaceController.cpp \
     src/ui/controllers/MainWindowController.cpp \
     src/ui/widgets/taglistitem.cpp \
+    src/database/basedao.cpp \
     src/database/songdao.cpp \
     src/database/tagdao.cpp \
+    src/database/playlistdao.cpp \
     src/managers/tagmanager.cpp \
+    src/managers/playlistmanager.cpp \
     src/core/appconfig.cpp \
     src/core/logger.cpp \
     src/database/databasemanager.cpp \
@@ -45,12 +48,15 @@ SOURCES += \
 HEADERS += \
     mainwindow.h \
     src/managers/tagmanager.h \
+    src/managers/playlistmanager.h \
     version.h \
     src/core/appconfig.h \
     src/core/logger.h \
     src/database/databasemanager.h \
+    src/database/basedao.h \
     src/database/songdao.h \
     src/database/tagdao.h \
+    src/database/playlistdao.h \
     src/database/logdao.h \
     src/models/song.h \
     src/models/tag.h \

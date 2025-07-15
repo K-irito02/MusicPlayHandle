@@ -140,6 +140,10 @@ public:
     FileInfo getFileInfo(const QString& filePath) const;
     TagInfo getTagInfo(const QString& tagName) const;
     
+    // 标签数据库操作
+    void loadTagsFromDatabase();
+    void updateTagList();
+    
     // 日志相关
     void logWarning(const QString& message);
     
@@ -260,14 +264,12 @@ private:
     FileInfo extractFileInfo(const QString& filePath);
     
     // 标签处理
-    void loadTagsFromDatabase();
     void saveTagToDatabase(const TagInfo& tagInfo);
     void deleteTagFromDatabase(const QString& tagName);
     TagInfo createDefaultTagInfo(const QString& name);
     
     // UI更新
     void updateFileList();
-    void updateTagList();
     void updateProgressBar();
     void updateStatusBar();
     void updateButtonStates();
@@ -285,7 +287,7 @@ private:
     void handleWarning(const QString& warning);
     void logInfo(const QString& message) const;
     void logError(const QString& error) const;
-    void logDebug(const QString& message);
+    void logDebug(const QString& message) const;
     
     // 内部操作方法
     void assignTag(const QString& filePath, const QString& tagName);

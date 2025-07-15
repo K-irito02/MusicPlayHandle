@@ -1,224 +1,354 @@
 #include "songdao.h"
 #include "databasemanager.h"
-#include <QSqlDatabase>
 #include <QSqlQuery>
-#include <QSqlError>
+#include <QSqlRecord>
 #include <QVariant>
 #include <QDebug>
 
 SongDao::SongDao(QObject* parent)
-    : QObject(parent)
-    , m_dbManager(DatabaseManager::instance())
+    : BaseDao(parent)
 {
 }
 
-SongDao::~SongDao()
+int SongDao::addSong(const Song& song)
 {
-}
-
-int SongDao::insertSong(const Song& song)
-{
-    // TODO: 实现完整的插入逻辑
-    Q_UNUSED(song);
-    return -1;
-}
-
-int SongDao::insertSongs(const QList<Song>& songs)
-{
-    if (songs.isEmpty()) return 0;
-    QSqlDatabase db = m_dbManager->database();
-    if (!db.isOpen()) {
-        logError("数据库未打开");
-        return 0;
+    const QString sql = R"(
+        INSERT INTO songs (title, artist, album, file_path, duration, file_size, tags, rating)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    )";
+    
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(song.title());
+    query.addBindValue(song.artist());
+    query.addBindValue(song.album());
+    query.addBindValue(song.filePath());
+    query.addBindValue(song.duration());
+    query.addBindValue(song.fileSize());
+    query.addBindValue(song.tags().join(","));
+    query.addBindValue(song.rating());
+    
+    if (query.exec()) {
+        return query.lastInsertId().toInt();
+    } else {
+        logError("addSong", query.lastError().text());
+        return -1;
     }
-    int successCount = 0;
-    if (!db.transaction()) {
-        logError("开启事务失败: " + db.lastError().text());
-        return 0;
-    }
-    QSqlQuery query(db);
-    for (const Song& song : songs) {
-        // 跳过已存在的文件路径
-        query.prepare("SELECT COUNT(*) FROM songs WHERE file_path = ?");
-        query.addBindValue(song.filePath());
-        if (!query.exec() || !query.next() || query.value(0).toInt() > 0) {
-            continue;
-        }
-        query.prepare(SQLStatements::INSERT_SONG);
-        query.addBindValue(song.filePath());
-        query.addBindValue(song.fileName());
-        query.addBindValue(song.title());
-        query.addBindValue(song.artist());
-        query.addBindValue(song.album());
-        query.addBindValue(song.duration());
-        query.addBindValue(song.fileSize());
-        query.addBindValue(song.bitRate());
-        query.addBindValue(song.sampleRate());
-        query.addBindValue(song.channels());
-        query.addBindValue(song.fileFormat());
-        query.addBindValue(song.coverPath());
-        query.addBindValue(song.hasLyrics());
-        query.addBindValue(song.lyricsPath());
-        query.addBindValue(song.playCount());
-        query.addBindValue(song.lastPlayedTime().toSecsSinceEpoch());
-        query.addBindValue(song.dateAdded().toSecsSinceEpoch());
-        query.addBindValue(song.dateModified().toSecsSinceEpoch());
-        query.addBindValue(song.isFavorite());
-        query.addBindValue(song.isAvailable());
-        query.addBindValue(song.createdAt().toSecsSinceEpoch());
-        query.addBindValue(song.updatedAt().toSecsSinceEpoch());
-        if (query.exec()) {
-            ++successCount;
-            emit songInserted(song);
-        } else {
-            logSqlError(query, "insertSong");
-        }
-    }
-    if (!db.commit()) {
-        logError("提交事务失败: " + db.lastError().text());
-        db.rollback();
-        return 0;
-    }
-    return successCount;
 }
 
-bool SongDao::updateSong(const Song& song)
+Song SongDao::getSongById(int id)
 {
-    // TODO: 实现更新逻辑
-    Q_UNUSED(song);
-    return false;
+    const QString sql = "SELECT * FROM songs WHERE id = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(id);
+    
+    if (query.exec() && query.next()) {
+        return createSongFromQuery(query);
+    }
+    
+    return Song(); // 返回空对象
 }
 
-bool SongDao::deleteSong(int songId)
+Song SongDao::getSongByPath(const QString& filePath)
 {
-    // TODO: 实现删除逻辑
-    Q_UNUSED(songId);
-    return false;
-}
-
-Song SongDao::getSong(int songId)
-{
-    // TODO: 实现获取单个歌曲逻辑
-    Q_UNUSED(songId);
-    return Song();
+    const QString sql = "SELECT * FROM songs WHERE file_path = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(filePath);
+    
+    if (query.exec() && query.next()) {
+        return createSongFromQuery(query);
+    }
+    
+    return Song(); // 返回空对象
 }
 
 QList<Song> SongDao::getAllSongs()
 {
-    // TODO: 实现获取所有歌曲逻辑
-    return QList<Song>();
+    QList<Song> songs;
+    const QString sql = "SELECT * FROM songs ORDER BY title";
+    QSqlQuery query = executeQuery(sql);
+    
+    while (query.next()) {
+        songs.append(createSongFromQuery(query));
+    }
+    
+    return songs;
+}
+
+QList<Song> SongDao::searchByTitle(const QString& title)
+{
+    QList<Song> songs;
+    const QString sql = "SELECT * FROM songs WHERE title LIKE ? ORDER BY title";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue("%" + title + "%");
+    
+    if (query.exec()) {
+        while (query.next()) {
+            songs.append(createSongFromQuery(query));
+        }
+    } else {
+        logError("searchByTitle", query.lastError().text());
+    }
+    
+    return songs;
+}
+
+QList<Song> SongDao::searchByArtist(const QString& artist)
+{
+    QList<Song> songs;
+    const QString sql = "SELECT * FROM songs WHERE artist LIKE ? ORDER BY title";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue("%" + artist + "%");
+    
+    if (query.exec()) {
+        while (query.next()) {
+            songs.append(createSongFromQuery(query));
+        }
+    } else {
+        logError("searchByArtist", query.lastError().text());
+    }
+    
+    return songs;
+}
+
+QList<Song> SongDao::searchByTag(const QString& tag)
+{
+    QList<Song> songs;
+    const QString sql = "SELECT * FROM songs WHERE tags LIKE ? ORDER BY title";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue("%" + tag + "%");
+    
+    if (query.exec()) {
+        while (query.next()) {
+            songs.append(createSongFromQuery(query));
+        }
+    } else {
+        logError("searchByTag", query.lastError().text());
+    }
+    
+    return songs;
+}
+
+bool SongDao::updateSong(const Song& song)
+{
+    const QString sql = R"(
+        UPDATE songs SET 
+            title = ?, artist = ?, album = ?, duration = ?, 
+            file_size = ?, tags = ?, rating = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    )";
+    
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(song.title());
+    query.addBindValue(song.artist());
+    query.addBindValue(song.album());
+    query.addBindValue(song.duration());
+    query.addBindValue(song.fileSize());
+    query.addBindValue(song.tags().join(","));
+    query.addBindValue(song.rating());
+    query.addBindValue(song.id());
+    
+    if (query.exec()) {
+        return query.numRowsAffected() > 0;
+    } else {
+        logError("updateSong", query.lastError().text());
+        return false;
+    }
+}
+
+bool SongDao::deleteSong(int id)
+{
+    const QString sql = "DELETE FROM songs WHERE id = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(id);
+    
+    if (query.exec()) {
+        return query.numRowsAffected() > 0;
+    } else {
+        logError("deleteSong", query.lastError().text());
+        return false;
+    }
+}
+
+bool SongDao::incrementPlayCount(int id)
+{
+    const QString sql = R"(
+        UPDATE songs SET 
+            play_count = play_count + 1, 
+            last_played = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    )";
+    
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(id);
+    
+    if (query.exec()) {
+        return query.numRowsAffected() > 0;
+    } else {
+        logError("incrementPlayCount", query.lastError().text());
+        return false;
+    }
+}
+
+bool SongDao::updateLastPlayed(int id, const QDateTime& lastPlayed)
+{
+    const QString sql = R"(
+        UPDATE songs SET 
+            last_played = ?, 
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    )";
+    
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(lastPlayed);
+    query.addBindValue(id);
+    
+    if (query.exec()) {
+        return query.numRowsAffected() > 0;
+    } else {
+        logError("updateLastPlayed", query.lastError().text());
+        return false;
+    }
+}
+
+bool SongDao::updateRating(int id, int rating)
+{
+    if (rating < 0 || rating > 5) {
+        logError("updateRating", "评分必须在0-5之间");
+        return false;
+    }
+    
+    const QString sql = R"(
+        UPDATE songs SET 
+            rating = ?, 
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    )";
+    
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(rating);
+    query.addBindValue(id);
+    
+    if (query.exec()) {
+        return query.numRowsAffected() > 0;
+    } else {
+        logError("updateRating", query.lastError().text());
+        return false;
+    }
+}
+
+bool SongDao::songExists(const QString& filePath)
+{
+    const QString sql = "SELECT COUNT(*) FROM songs WHERE file_path = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(filePath);
+    
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt() > 0;
+    }
+    
+    return false;
 }
 
 int SongDao::getSongCount()
 {
-    // TODO: 实现获取歌曲数量逻辑
+    const QString sql = "SELECT COUNT(*) FROM songs";
+    QSqlQuery query = executeQuery(sql);
+    
+    if (query.next()) {
+        return query.value(0).toInt();
+    }
+    
     return 0;
 }
 
-bool SongDao::songExists(int songId)
+Song SongDao::createSongFromQuery(const QSqlQuery& query)
 {
-    // TODO: 实现检查歌曲是否存在逻辑
-    Q_UNUSED(songId);
-    return false;
-}
-
-bool SongDao::addSongToTag(int songId, int tagId)
-{
-    QSqlQuery query;
-    query.prepare("INSERT OR IGNORE INTO song_tag_rel (song_id, tag_id) VALUES (?, ?)");
-    query.addBindValue(songId);
-    query.addBindValue(tagId);
-    if (!query.exec()) {
-        logSqlError(query, "addSongToTag");
-        return false;
+    Song song;
+    song.setId(query.value("id").toInt());
+    song.setTitle(query.value("title").toString());
+    song.setArtist(query.value("artist").toString());
+    song.setAlbum(query.value("album").toString());
+    song.setFilePath(query.value("file_path").toString());
+    song.setDuration(query.value("duration").toInt());
+    song.setFileSize(query.value("file_size").toLongLong());
+    song.setDateAdded(query.value("date_added").toDateTime());
+    song.setLastPlayedTime(query.value("last_played").toDateTime());
+    song.setPlayCount(query.value("play_count").toInt());
+    song.setRating(query.value("rating").toInt());
+    
+    // 解析标签字符串
+    QString tagsStr = query.value("tags").toString();
+    if (!tagsStr.isEmpty()) {
+        song.setTags(tagsStr.split(",", Qt::SkipEmptyParts));
     }
-    return true;
-}
-
-bool SongDao::removeSongFromTag(int songId, int tagId)
-{
-    QSqlQuery query;
-    query.prepare("DELETE FROM song_tag_rel WHERE song_id = ? AND tag_id = ?");
-    query.addBindValue(songId);
-    query.addBindValue(tagId);
-    if (!query.exec()) {
-        logSqlError(query, "removeSongFromTag");
-        return false;
-    }
-    return true;
-}
-
-bool SongDao::songHasTag(int songId, int tagId)
-{
-    QSqlQuery query;
-    query.prepare("SELECT COUNT(*) FROM song_tag_rel WHERE song_id = ? AND tag_id = ?");
-    query.addBindValue(songId);
-    query.addBindValue(tagId);
-    if (!query.exec() || !query.next()) {
-        logSqlError(query, "songHasTag");
-        return false;
-    }
-    return query.value(0).toInt() > 0;
+    
+    return song;
 }
 
 QList<Song> SongDao::getSongsByTag(int tagId)
 {
     QList<Song> songs;
-    QSqlDatabase db = m_dbManager->database();
-    if (!db.isOpen()) {
-        logError("数据库未打开");
-        return songs;
-    }
-    QSqlQuery query(db);
-    query.prepare("SELECT s.* FROM songs s JOIN song_tag_rel r ON s.id = r.song_id WHERE r.tag_id = ? AND s.is_available = 1 ORDER BY s.title");
+    const QString sql = "SELECT s.* FROM songs s "
+                       "INNER JOIN song_tags st ON s.id = st.song_id "
+                       "WHERE st.tag_id = ?";
+    
+    QSqlQuery query = prepareQuery(sql);
     query.addBindValue(tagId);
-    if (!query.exec()) {
-        logSqlError(query, "getSongsByTag");
-        return songs;
+    
+    if (query.exec()) {
+        while (query.next()) {
+            songs.append(createSongFromQuery(query));
+        }
     }
-    while (query.next()) {
-        songs.append(createSongFromQuery(query));
-    }
+    
     return songs;
 }
 
-QString SongDao::lastError() const
+bool SongDao::removeSongFromTag(int songId, int tagId)
 {
-    return m_lastError;
+    const QString sql = "DELETE FROM song_tags WHERE song_id = ? AND tag_id = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(songId);
+    query.addBindValue(tagId);
+    
+    return query.exec();
 }
 
-Song SongDao::createSongFromQuery(const QSqlQuery& query)
+bool SongDao::addSongToTag(int songId, int tagId)
 {
-    // TODO: 实现从查询结果创建Song对象的逻辑
-    Q_UNUSED(query);
-    return Song();
+    const QString sql = "INSERT OR IGNORE INTO song_tags (song_id, tag_id) VALUES (?, ?)";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(songId);
+    query.addBindValue(tagId);
+    
+    return query.exec();
 }
 
-void SongDao::logError(const QString& error)
+bool SongDao::songHasTag(int songId, int tagId)
 {
-    m_lastError = error;
-    qWarning() << "SongDao Error:" << error;
-    emit databaseError(error);
+    const QString sql = "SELECT COUNT(*) FROM song_tags WHERE song_id = ? AND tag_id = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(songId);
+    query.addBindValue(tagId);
+    
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt() > 0;
+    }
+    
+    return false;
 }
 
-void SongDao::logSqlError(const QSqlQuery& query, const QString& operation)
+int SongDao::insertSongs(const QList<Song>& songs)
 {
-    QString error = QString("SQL Error in %1: %2").arg(operation, query.lastError().text());
-    logError(error);
+    int insertedCount = 0;
+    
+    for (const Song& song : songs) {
+        int id = addSong(song);
+        if (id > 0) {
+            insertedCount++;
+        }
+    }
+    
+    return insertedCount;
 }
-
-// SQL语句常量定义 - 待完善
-const QString SongDao::SQLStatements::INSERT_SONG = 
-    "INSERT INTO songs (file_path, file_name, title, artist, album, duration, "
-    "file_size, bit_rate, sample_rate, channels, file_format, cover_path, "
-    "has_lyrics, lyrics_path, play_count, last_played_time, date_added, "
-    "date_modified, is_favorite, is_available, created_at, updated_at) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-const QString SongDao::SQLStatements::SELECT_ALL_SONGS = 
-    "SELECT * FROM songs WHERE is_available = 1 ORDER BY title";
-
-const QString SongDao::SQLStatements::COUNT_SONGS = 
-    "SELECT COUNT(*) FROM songs WHERE is_available = 1";
-
-// 其他SQL语句常量将在后续实现中添加 

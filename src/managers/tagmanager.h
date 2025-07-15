@@ -14,7 +14,7 @@
 #include <QDateTime>
 
 // 前向声明
-class TagDAO;
+class TagDao;
 class SongDao;
 class Logger;
 
@@ -262,7 +262,7 @@ private:
     static QMutex m_instanceMutex;
     
     // 数据访问对象
-    TagDAO* m_tagDao;
+    TagDao* m_tagDao;
     SongDao* m_songDao;
     
     // 缓存

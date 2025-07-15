@@ -53,25 +53,6 @@ public:
      */
     virtual bool tableExists(const QString& tableName) const = 0;
     
-    // 事务管理
-    /**
-     * @brief 开始事务
-     * @return 是否成功
-     */
-    virtual bool beginTransaction() = 0;
-    
-    /**
-     * @brief 提交事务
-     * @return 是否成功
-     */
-    virtual bool commitTransaction() = 0;
-    
-    /**
-     * @brief 回滚事务
-     * @return 是否成功
-     */
-    virtual bool rollbackTransaction() = 0;
-    
     // 查询执行
     /**
      * @brief 执行SQL查询

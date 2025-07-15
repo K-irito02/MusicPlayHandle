@@ -10,6 +10,8 @@
 #include <QColor>
 #include <QList>
 
+enum class PlaylistType { User, System };
+
 class Playlist {
 public:
     Playlist();
@@ -41,6 +43,10 @@ public:
     // 统计信息
     int songCount() const;
     void setSongCount(int count);
+    
+    // 兼容性方法
+    int size() const { return songCount(); }
+    bool isEmpty() const { return songCount() == 0; }
     
     qint64 totalDuration() const;
     void setTotalDuration(qint64 duration);
@@ -105,6 +111,13 @@ public:
     QString formatModifiedTime() const;
     QString formatLastPlayedTime() const;
     
+    PlaylistType type() const { return m_type; }
+    void setType(PlaylistType type) { m_type = type; }
+    bool isSystem() const { return m_isSystem; }
+    void setIsSystem(bool isSystem) { m_isSystem = isSystem; }
+    QDateTime updatedAt() const { return m_updatedAt; }
+    void setUpdatedAt(const QDateTime& updatedAt) { m_updatedAt = updatedAt; }
+    
 private:
     int m_id;
     QString m_name;
@@ -122,6 +135,9 @@ private:
     bool m_isSystemPlaylist;
     bool m_isFavorite;
     int m_sortOrder;
+    PlaylistType m_type;
+    bool m_isSystem;
+    QDateTime m_updatedAt;
     
     // 初始化默认值
     void initializeDefaults();
@@ -134,4 +150,4 @@ private:
 // 注册元类型
 Q_DECLARE_METATYPE(Playlist)
 
-#endif // PLAYLIST_H 
+#endif // PLAYLIST_H

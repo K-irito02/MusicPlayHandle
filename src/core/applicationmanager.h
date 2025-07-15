@@ -189,6 +189,7 @@ public:
     void handleCriticalError(const QString& error);
     void handleFatalError(const QString& error);
     void reportCrash(const QString& crashInfo);
+    void logError(const QString& message);
     
     // 更新检查
     void checkForUpdates();
@@ -440,7 +441,6 @@ private:
     // 日志方法
     void logInfo(const QString& message);
     void logWarning(const QString& message);
-    void logError(const QString& error);
     void logDebug(const QString& message);
     
     // 常量
@@ -454,4 +454,4 @@ private:
     static const int MAX_BACKUP_FILES = 10;
 };
 
-#endif // APPLICATIONMANAGER_H 
+#endif // APPLICATIONMANAGER_H
