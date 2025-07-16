@@ -25,7 +25,6 @@ enum class AudioState {
  * @brief 播放模式枚举
  */
 enum class PlayMode {
-    Sequential,     ///< 顺序播放
     Loop,           ///< 列表循环
     Random,         ///< 随机播放
     RepeatOne       ///< 单曲循环
@@ -186,11 +185,10 @@ inline QString audioStateToString(AudioState state) {
  */
 inline QString playModeToString(PlayMode mode) {
     switch (mode) {
-        case PlayMode::Sequential: return "Sequential";
         case PlayMode::Loop: return "Loop";
         case PlayMode::Random: return "Random";
         case PlayMode::RepeatOne: return "RepeatOne";
-        default: return "Unknown";
+        default: return "Loop";
     }
 }
 
@@ -279,4 +277,4 @@ Q_DECLARE_METATYPE(AudioTypes::SampleRate)
 Q_DECLARE_METATYPE(AudioTypes::BitRate)
 Q_DECLARE_METATYPE(AudioTypes::AudioChannel)
 
-#endif // AUDIOTYPES_H 
+#endif // AUDIOTYPES_H

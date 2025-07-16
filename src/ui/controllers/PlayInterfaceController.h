@@ -163,7 +163,7 @@ signals:
     // 播放控制信号
     void playRequested();
     void pauseRequested();
-    void stopRequested();
+    void playModeChangeRequested();
     void nextRequested();
     void previousRequested();
     void seekRequested(qint64 position);
@@ -202,7 +202,7 @@ public slots:
     
     // UI事件槽
     void onPlayPauseClicked();
-    void onStopClicked();
+    void onPlayModeClicked();
     void onNextClicked();
     void onPreviousClicked();
     void onVolumeSliderChanged(int value);
@@ -221,6 +221,9 @@ private slots:
     void onAnimationTimer();
     void onCoverLoadFinished();
     void onLyricLoadFinished();
+
+public slots:
+    void updatePlayModeButton(int playMode);
 
 private:
     PlayInterface* m_interface;
@@ -321,7 +324,6 @@ private:
     void updateSongInfo();
     void updateEqualizerDisplay();
     void updateVisualizationDisplay();
-    
     // 工具方法
     QString formatTime(qint64 milliseconds) const;
     QColor getSpectrumColor(int band) const;

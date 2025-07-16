@@ -27,7 +27,7 @@ AudioEngine::AudioEngine(QObject* parent)
     , m_volume(70)
     , m_muted(false)
     , m_currentIndex(-1)
-    , m_playMode(AudioTypes::PlayMode::Sequential)
+    , m_playMode(AudioTypes::PlayMode::Loop)
     , m_equalizerEnabled(false)
     , m_balance(0.0)
     , m_speed(1.0)
@@ -194,6 +194,9 @@ void AudioEngine::play()
             loadMedia(song.filePath());
             m_player->play();
             logPlaybackEvent("开始播放", song.title());
+            
+            // 发出当前歌曲变化信号
+            updateCurrentSong();
             
             // 添加到播放历史
             addToHistory(song);
@@ -416,10 +419,10 @@ void AudioEngine::setPlayMode(AudioTypes::PlayMode mode)
     
     QString modeStr;
     switch (mode) {
-        case AudioTypes::PlayMode::Sequential: modeStr = "顺序播放"; break;
         case AudioTypes::PlayMode::Loop: modeStr = "列表循环"; break;
         case AudioTypes::PlayMode::RepeatOne: modeStr = "单曲循环"; break;
         case AudioTypes::PlayMode::Random: modeStr = "随机播放"; break;
+        default: modeStr = "列表循环"; break;
     }
     
     logPlaybackEvent("播放模式", modeStr);
@@ -707,13 +710,6 @@ void AudioEngine::handlePlaybackFinished()
     if (m_playlist.isEmpty()) return;
     
     switch (m_playMode) {
-        case AudioTypes::PlayMode::Sequential:
-            if (m_currentIndex < m_playlist.size() - 1) {
-                playNext();
-            } else {
-                stop();
-            }
-            break;
         case AudioTypes::PlayMode::Loop:
             playNext();
             break;
@@ -749,13 +745,14 @@ int AudioEngine::getNextIndex()
     if (m_playlist.isEmpty()) return -1;
     
     switch (m_playMode) {
-        case AudioTypes::PlayMode::Sequential:
         case AudioTypes::PlayMode::Loop:
             return (m_currentIndex + 1) % m_playlist.size();
         case AudioTypes::PlayMode::RepeatOne:
             return m_currentIndex;
         case AudioTypes::PlayMode::Random:
             return QRandomGenerator::global()->bounded(m_playlist.size());
+        default:
+            return (m_currentIndex + 1) % m_playlist.size();
     }
     
     return -1;
@@ -766,13 +763,14 @@ int AudioEngine::getPreviousIndex()
     if (m_playlist.isEmpty()) return -1;
     
     switch (m_playMode) {
-        case AudioTypes::PlayMode::Sequential:
         case AudioTypes::PlayMode::Loop:
             return (m_currentIndex - 1 + m_playlist.size()) % m_playlist.size();
         case AudioTypes::PlayMode::RepeatOne:
             return m_currentIndex;
         case AudioTypes::PlayMode::Random:
             return QRandomGenerator::global()->bounded(m_playlist.size());
+        default:
+            return (m_currentIndex - 1 + m_playlist.size()) % m_playlist.size();
     }
     
     return -1;
@@ -915,4 +913,4 @@ double AudioUtils::calculatePeak(const QByteArray& audioData)
     // 实现峰值计算
     Q_UNUSED(audioData)
     return 0.0;
-} 
+}

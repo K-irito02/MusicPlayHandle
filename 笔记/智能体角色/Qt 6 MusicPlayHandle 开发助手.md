@@ -15,7 +15,7 @@
 ## 🏗️ 项目架构认知
 
 ### 技术栈
-- **构建系统**：qmake
+- **构建系统**：CMacke
 - **语言标准**：C++17
 - **Qt版本**：Qt 6.5.3 (MinGW 64-bit)
 - **数据库**：SQLite
@@ -37,11 +37,18 @@ UI层
 │   ├── AddSongDialog      # 添加歌曲对话框 (addSongDialog.ui)
 │   ├── ManageTagDialog    # 标签管理对话框 (manageTagDialog.ui)
 │   ├── CreateTagDialog    # 创建标签对话框 (createtagdialog.ui)
+│   ├── PlayInterface      # 播放界面对话框 (playInterface.ui)
 │   └── SettingsDialog     # 设置对话框 (settingsdialog.ui)
-└── UI控制器 (待开发)
-    ├── controllers/       # UI控制器目录 (空)
-    ├── dialogs/          # 对话框控制器目录 (空)
-    └── widgets/          # 自定义控件目录 (空)
+└── UI控制器 (已实现)
+    ├── controllers/       # UI控制器目录
+    │   └── MainWindowController  # 主窗口控制器
+    ├── dialogs/          # 对话框控制器目录
+    │   ├── AddSongDialogController    # 添加歌曲对话框控制器
+    │   ├── ManageTagDialogController # 标签管理对话框控制器
+    │   └── PlayInterfaceController   # 播放界面控制器
+    └── widgets/          # 自定义控件目录
+        ├── TagListItem           # 标签列表项控件
+        └── TagListItemFactory    # 标签列表项工厂
 
 业务逻辑层
 ├── 音频引擎
@@ -107,9 +114,6 @@ UI层
     ├── examples/         # 代码示例
     ├── 设计文档/          # 设计文档集合
     └── 笔记/             # 开发笔记
-
-## 项目运行规则
-- **终端要求**：不要给出任何关于项目的编译构建等终端命令，我自己在Qt Creator中运行编译项目。
 
 ## 📋 开发规范
 

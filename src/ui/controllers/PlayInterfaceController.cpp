@@ -384,8 +384,8 @@ void PlayInterfaceController::setupConnections()
             // 播放控制信号
             connect(m_interface, &PlayInterface::playPauseClicked, 
                     this, &PlayInterfaceController::onPlayPauseClicked);
-            connect(m_interface, &PlayInterface::stopClicked, 
-                    this, &PlayInterfaceController::onStopClicked);
+            connect(m_interface, &PlayInterface::playModeClicked, 
+                    this, &PlayInterfaceController::onPlayModeClicked);
             connect(m_interface, &PlayInterface::nextClicked, 
                     this, &PlayInterfaceController::onNextClicked);
             connect(m_interface, &PlayInterface::previousClicked, 
@@ -943,10 +943,11 @@ void PlayInterfaceController::onPlayPauseClicked()
     emit playRequested();
 }
 
-void PlayInterfaceController::onStopClicked()
+void PlayInterfaceController::onPlayModeClicked()
 {
-    logInfo("停止按钮点击");
-    emit stopRequested();
+    logInfo("播放模式按钮点击");
+    // 发出信号让主控制器处理播放模式切换
+    emit playModeChangeRequested();
 }
 
 void PlayInterfaceController::onNextClicked()
@@ -1920,4 +1921,39 @@ QString PlayInterfaceController::formatTime(qint64 milliseconds) const
                 .arg(minutes)
                 .arg(seconds, 2, 10, QChar('0'));
     }
+}
+
+void PlayInterfaceController::updatePlayModeButton(int playMode)
+{
+    if (!m_interface) {
+        return;
+    }
+    
+    QString text, iconPath, tooltip;
+    
+    // 根据播放模式设置按钮属性
+    switch (playMode) {
+        case 0: // 列表循环
+            text = "列表循环";
+            iconPath = ":/new/prefix1/images/listCycle.png";
+            tooltip = "当前模式：列表循环";
+            break;
+        case 1: // 随机播放
+            text = "随机播放";
+            iconPath = ":/new/prefix1/images/shufflePlay.png";
+            tooltip = "当前模式：随机播放";
+            break;
+        case 2: // 单曲循环
+            text = "单曲循环";
+            iconPath = ":/new/prefix1/images/singleCycle.png";
+            tooltip = "当前模式：单曲循环";
+            break;
+        default:
+            text = "列表循环";
+            iconPath = ":/new/prefix1/images/listCycle.png";
+            tooltip = "当前模式：列表循环";
+            break;
+    }
+    
+    m_interface->updatePlayModeButton("", iconPath, tooltip); // 不显示文字，只显示图标
 }

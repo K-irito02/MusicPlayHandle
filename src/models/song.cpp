@@ -406,7 +406,40 @@ QString Song::formatFileSize(qint64 bytes) const
     return QString("%1 %2")
            .arg(size, 0, 'f', unitIndex == 0 ? 0 : 1)
            .arg(units[unitIndex]);
-} 
+}
+
+void Song::extractBasicMetadata(Song& song, const QString& filePath)
+{
+    QFileInfo fileInfo(filePath);
+    QString baseName = fileInfo.baseName(); // 不包含扩展名的文件名
+    
+    // 尝试从文件名解析 "艺术家 - 标题" 格式
+    if (baseName.contains(" - ")) {
+        QStringList parts = baseName.split(" - ", Qt::SkipEmptyParts);
+        if (parts.size() >= 2) {
+            song.setArtist(parts[0].trimmed());
+            song.setTitle(parts[1].trimmed());
+        } else {
+            // 如果分割失败，使用文件名作为标题
+            song.setTitle(baseName);
+            song.setArtist("未知艺术家");
+        }
+    } else {
+        // 没有分隔符，使用整个文件名作为标题
+        song.setTitle(baseName);
+        song.setArtist("未知艺术家");
+    }
+    
+    // 设置默认专辑名
+    if (song.album().isEmpty()) {
+        song.setAlbum("未知专辑");
+    }
+    
+    // 确保title不为空（数据库约束要求）
+    if (song.title().isEmpty()) {
+        song.setTitle(fileInfo.fileName()); // 使用完整文件名作为后备
+    }
+}
 
 Song Song::fromFile(const QString& filePath)
 {
@@ -419,6 +452,9 @@ Song Song::fromFile(const QString& filePath)
     song.setDateAdded(QDateTime::currentDateTime());
     song.setDateModified(fileInfo.lastModified());
     song.setIsAvailable(fileInfo.exists());
-    // 其他字段如 title/artist/album 可后续通过元数据提取
+    
+    // 基本元数据提取
+    extractBasicMetadata(song, filePath);
+    
     return song;
 }

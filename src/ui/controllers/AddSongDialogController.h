@@ -44,6 +44,9 @@ struct FileInfo {
     QString filePath;
     QString fileName;
     QString displayName;
+    QString title;
+    QString artist;
+    QString album;
     FileStatus status;
     QString errorMessage;
     qint64 fileSize;
@@ -273,6 +276,7 @@ private:
     void updateProgressBar();
     void updateStatusBar();
     void updateButtonStates();
+    void refreshUI();
     
     // 工具方法
     QString formatFileSize(qint64 size) const;

@@ -16,6 +16,7 @@
 #include <QProgressBar>
 #include <QStatusBar>
 #include <QTimer>
+#include <QMap>
 #include <QMenu>
 #include <QContextMenuEvent>
 #include <QDragEnterEvent>
@@ -225,12 +226,19 @@ public slots:
     // 播放控制事件
     void onPlayButtonClicked();
     void onPauseButtonClicked();
-    void onStopButtonClicked();
+
     void onNextButtonClicked();
     void onPreviousButtonClicked();
     void onVolumeSliderChanged(int value);
     void onProgressSliderChanged(int value);
     void onMuteButtonClicked();
+    
+    // 歌曲列表控制按钮事件
+    void onPlayAllButtonClicked();             // 开始播放按钮点击
+    void onPlayModeButtonClicked();            // 播放模式按钮点击
+    void onSelectAllButtonClicked();           // 全选按钮点击
+    void onClearSelectionButtonClicked();      // 取消全选按钮点击
+    void onDeleteSelectedButtonClicked();      // 删除按钮点击
     
     // 音频引擎事件
     void onAudioStateChanged(AudioTypes::AudioState state);
@@ -262,6 +270,7 @@ public slots:
     void onDropEvent(QDropEvent* event);
     
     void addSongs(const QStringList& filePaths);
+    void addSongs(const QStringList& filePaths, const QMap<QString, QStringList>& fileTagAssignments);
     void addTag(const QString& name, const QString& imagePath);
     void editTag(const QString& oldName, const QString& newName, const QString& imagePath);
     void editTagFromMainWindow(const QString& tagName);
@@ -273,6 +282,13 @@ public slots:
     void showEditSongDialog(int songId, const QString& songTitle);
     void showInFileExplorer(int songId, const QString& songTitle);
     void deleteSongFromDatabase(int songId, const QString& songTitle);
+    
+    // 新增的歌曲列表控制方法
+    void togglePlayPause();                    // 切换播放/暂停状态
+    void cyclePlayMode();                      // 循环切换播放模式
+    void selectAllSongs();                     // 全选当前列表歌曲
+    void clearSongSelection();                 // 取消选中状态
+    void deleteSelectedSongs();                // 删除选中的歌曲
     
     // 播放列表操作方法
     void showCreatePlaylistDialog();
@@ -294,7 +310,7 @@ signals:
     // 用户操作信号
     void playRequested(const Song& song);
     void pauseRequested();
-    void stopRequested();
+
     void nextRequested();
     void previousRequested();
     void seekRequested(qint64 position);
@@ -342,12 +358,12 @@ private:
     QLabel* m_currentSongLabel;
     QLabel* m_currentTimeLabel;     // 当前播放时间标签
     QLabel* m_totalTimeLabel;       // 总时长标签
-    QLabel* m_volumeLabel;          // 音量显示标签
+    // QLabel* m_volumeLabel;          // 音量显示标签已删除
     QSlider* m_progressSlider;
     QSlider* m_volumeSlider;
     QPushButton* m_playButton;
     QPushButton* m_pauseButton;
-    QPushButton* m_stopButton;
+
     QPushButton* m_nextButton;
     QPushButton* m_previousButton;
     QPushButton* m_muteButton;

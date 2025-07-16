@@ -1053,13 +1053,13 @@ QGroupBox::title {
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton_stop_song">
+          <widget class="QPushButton" name="pushButton_play_mode">
            <property name="text">
             <string/>
            </property>
            <property name="icon">
             <iconset resource="icon.qrc">
-             <normaloff>:/new/prefix1/images/stopIcon.png</normaloff>:/new/prefix1/images/stopIcon.png</iconset>
+             <normaloff>:/new/prefix1/images/listCycle.png</normaloff>:/new/prefix1/images/listCycle.png</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -1068,7 +1068,7 @@ QGroupBox::title {
             </size>
            </property>
            <property name="toolTip">
-            <string>停止</string>
+            <string>播放模式：列表循环</string>
            </property>
           </widget>
          </item>
@@ -1117,4 +1117,4 @@ QGroupBox::title {
   <include location="icon.qrc"/>
  </resources>
  <connections/>
-</ui> 
+</ui>

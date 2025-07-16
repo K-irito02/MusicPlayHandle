@@ -301,35 +301,35 @@ QStatusBar {
                   <normaloff>:/new/prefix1/images/playIcon.png</normaloff>:/new/prefix1/images/playIcon.png</iconset>
                 </property>
                 <property name="toolTip">
-                 <string>播放当前列表中的所有歌曲</string>
+                 <string>播放/暂停当前歌曲</string>
                 </property>
                </widget>
               </item>
               <item>
                <widget class="QPushButton" name="pushButton_shuffle">
                 <property name="text">
-                 <string>全部</string>
+                 <string>列表循环</string>
                 </property>
                 <property name="icon">
                  <iconset resource="icon.qrc">
-                  <normaloff>:/new/prefix1/images/reverseIcon.png</normaloff>:/new/prefix1/images/reverseIcon.png</iconset>
+                  <normaloff>:/new/prefix1/images/listCycle.png</normaloff>:/new/prefix1/images/listCycle.png</iconset>
                 </property>
                 <property name="toolTip">
-                 <string>随机播放模式</string>
+                 <string>切换播放模式：列表循环/单曲循环/随机播放</string>
                 </property>
                </widget>
               </item>
               <item>
                <widget class="QPushButton" name="pushButton_repeat">
                 <property name="text">
-                 <string>全部</string>
+                 <string>全选</string>
                 </property>
                 <property name="icon">
                  <iconset resource="icon.qrc">
                   <normaloff>:/new/prefix1/images/playlistIcon.png</normaloff>:/new/prefix1/images/playlistIcon.png</iconset>
                 </property>
                 <property name="toolTip">
-                 <string>重复播放模式</string>
+                 <string>全选当前标签下的所有歌曲</string>
                 </property>
                </widget>
               </item>
@@ -518,16 +518,16 @@ QStatusBar {
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_stop">
+              <widget class="QPushButton" name="pushButton_play_mode">
                <property name="text">
                 <string/>
                </property>
                <property name="icon">
                 <iconset resource="icon.qrc">
-                 <normaloff>:/new/prefix1/images/stopIcon.png</normaloff>:/new/prefix1/images/stopIcon.png</iconset>
+                 <normaloff>:/new/prefix1/images/listCycle.png</normaloff>:/new/prefix1/images/listCycle.png</iconset>
                </property>
                <property name="toolTip">
-                <string>停止</string>
+                <string>播放模式：列表循环</string>
                </property>
                <property name="iconSize">
                 <size>

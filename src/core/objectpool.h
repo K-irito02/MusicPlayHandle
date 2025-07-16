@@ -42,10 +42,22 @@ struct ObjectPoolStats {
  * @tparam T 对象类型
  * @details 提供线程安全的对象池实现，支持自动清理和统计
  */
-template<typename T>
-class ObjectPool : public QObject
+class ObjectPoolBase : public QObject
 {
-static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
+    Q_OBJECT
+
+protected:
+    explicit ObjectPoolBase(QObject* parent = nullptr) : QObject(parent) {}
+
+signals:
+    void objectsCleaned(int count);
+    void poolStatusChanged(int poolSize, int inUse);
+};
+
+template<typename T>
+class ObjectPool : public ObjectPoolBase
+{
+    static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
 
 public:
     using ObjectPtr = std::unique_ptr<T>;
@@ -60,7 +72,7 @@ public:
      * @param initialSize 初始池大小
      */
     explicit ObjectPool(QObject* parent = nullptr, int maxSize = 100, int initialSize = 10)
-        : QObject(parent)
+        : ObjectPoolBase(parent)
         , m_maxSize(maxSize)
         , m_initialSize(initialSize)
         , m_cleanupTimer(new QTimer(this))
@@ -73,7 +85,7 @@ public:
     {
         // 设置清理定时器
         m_cleanupTimer->setInterval(m_cleanupInterval);
-        connect(m_cleanupTimer, &QTimer::timeout, this, &ObjectPool::cleanup);
+        connect(m_cleanupTimer, &QTimer::timeout, this, QOverload<>::of(&ObjectPool::cleanup));
         m_cleanupTimer->start();
         
         // 预创建对象
@@ -163,6 +175,7 @@ public:
             m_stats.avgAcquireTime = (m_stats.avgAcquireTime + elapsed) / 2;
             
             m_stats.calculateHitRate();
+            emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
         }
         
         return obj;
@@ -210,6 +223,7 @@ public:
             m_stats.currentInUse--;
             m_stats.currentPoolSize = m_pool.size();
             m_stats.maxPoolSize = qMax(m_stats.maxPoolSize, m_stats.currentPoolSize);
+            emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
         }
     }
     
@@ -249,6 +263,7 @@ public:
         
         if (m_enableStats) {
             m_stats.currentPoolSize = 0;
+            emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
         }
     }
     
@@ -278,6 +293,7 @@ public:
         if (m_enableStats) {
             m_stats.currentPoolSize = m_pool.size();
             m_stats.maxPoolSize = qMax(m_stats.maxPoolSize, m_stats.currentPoolSize);
+            emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
         }
     }
     
@@ -298,6 +314,7 @@ public:
         m_stats = ObjectPoolStats();
         m_stats.currentPoolSize = m_pool.size();
         m_stats.currentInUse = m_stats.totalAcquired - m_stats.totalReleased;
+        emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
     }
     
     /**
@@ -342,10 +359,11 @@ public:
         
         if (m_enableStats) {
             m_stats.currentPoolSize = m_pool.size();
+            emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
         }
     }
     
-public slots:
+protected:
     /**
      * @brief 清理过期对象
      */
@@ -369,26 +387,15 @@ public slots:
         if (cleanedCount > 0) {
             if (m_enableStats) {
                 m_stats.currentPoolSize = m_pool.size();
+                emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
             }
             
             qDebug() << "ObjectPool cleaned up" << cleanedCount << "expired objects";
-            emit objectsCleaned(cleanedCount);
+            emit ObjectPoolBase::objectsCleaned(cleanedCount);
         }
     }
     
-signals:
-    /**
-     * @brief 对象清理信号
-     * @param count 清理的对象数量
-     */
-    void objectsCleaned(int count);
-    
-    /**
-     * @brief 池状态变化信号
-     * @param poolSize 当前池大小
-     * @param inUse 使用中数量
-     */
-    void poolStatusChanged(int poolSize, int inUse);
+// 信号已移至基类 ObjectPoolBase
     
 private:
     /**

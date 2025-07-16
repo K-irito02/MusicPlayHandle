@@ -26,7 +26,7 @@ PlaylistManager::PlaylistManager(QObject* parent)
     , m_currentPlaylistId(-1)
     , m_currentIndex(-1)
     , m_currentSongIndex(-1)
-    , m_playMode(PlayMode::Sequential)
+    , m_playMode(PlayMode::Loop)
     , m_state(PlaylistState::Stopped)
     , m_repeatMode(RepeatMode::NoRepeat)
     , m_shuffleMode(false)
@@ -701,12 +701,11 @@ PlayMode PlaylistManager::getPlayMode() const
 QString PlaylistManager::getPlayModeString() const
 {
     switch (m_playMode) {
-    case PlayMode::Sequential: return "顺序播放";
     case PlayMode::Loop: return "列表循环";
     case PlayMode::SingleLoop: return "单曲循环";
     case PlayMode::Random: return "随机播放";
     case PlayMode::Shuffle: return "洗牌播放";
-    default: return "未知模式";
+    default: return "列表循环";
     }
 }
 

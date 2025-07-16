@@ -12,6 +12,28 @@ SongDao::SongDao(QObject* parent)
 
 int SongDao::addSong(const Song& song)
 {
+    // 首先检查歌曲是否已存在
+    if (songExists(song.filePath())) {
+        qDebug() << "[SongDao] addSong: 歌曲已存在，尝试更新:" << song.filePath();
+        
+        // 获取现有歌曲的ID
+        Song existingSong = getSongByPath(song.filePath());
+        if (existingSong.id() > 0) {
+            // 更新现有歌曲信息
+            Song updatedSong = song;
+            updatedSong.setId(existingSong.id());
+            
+            if (updateSong(updatedSong)) {
+                qDebug() << "[SongDao] addSong: 歌曲更新成功，ID:" << existingSong.id();
+                return existingSong.id();
+            } else {
+                logError("addSong", "更新现有歌曲失败");
+                return -1;
+            }
+        }
+    }
+    
+    // 插入新歌曲
     const QString sql = R"(
         INSERT INTO songs (title, artist, album, file_path, duration, file_size, tags, rating)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -28,7 +50,9 @@ int SongDao::addSong(const Song& song)
     query.addBindValue(song.rating());
     
     if (query.exec()) {
-        return query.lastInsertId().toInt();
+        int newId = query.lastInsertId().toInt();
+        qDebug() << "[SongDao] addSong: 新歌曲插入成功，ID:" << newId << "路径:" << song.filePath();
+        return newId;
     } else {
         logError("addSong", query.lastError().text());
         return -1;

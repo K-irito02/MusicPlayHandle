@@ -60,13 +60,25 @@ Tag TagDao::getTagByName(const QString& name)
 QList<Tag> TagDao::getAllTags()
 {
     QList<Tag> tags;
+    
+    qDebug() << "TagDao::getAllTags - 开始查询所有标签";
     const QString sql = "SELECT * FROM tags ORDER BY is_system DESC, name";
     QSqlQuery query = executeQuery(sql);
     
+    // 检查查询是否有效
+    if (!query.isValid() && !query.isActive()) {
+        logError("getAllTags", "查询执行失败，无法获取标签列表");
+        qDebug() << "TagDao::getAllTags - 查询失败，返回空列表";
+        return tags;
+    }
+    
+    qDebug() << "TagDao::getAllTags - 查询成功，开始处理结果";
+     
     while (query.next()) {
         tags.append(createTagFromQuery(query));
     }
     
+    qDebug() << QString("TagDao::getAllTags - 查询完成，共获取 %1 个标签").arg(tags.size());
     return tags;
 }
 
@@ -75,6 +87,12 @@ QList<Tag> TagDao::getSystemTags()
     QList<Tag> tags;
     const QString sql = "SELECT * FROM tags WHERE is_system = 1 ORDER BY name";
     QSqlQuery query = executeQuery(sql);
+    
+    // 检查查询是否有效
+    if (!query.isValid() && !query.isActive()) {
+        logError("getSystemTags", "查询执行失败，无法获取系统标签列表");
+        return tags;
+    }
     
     while (query.next()) {
         tags.append(createTagFromQuery(query));
@@ -88,6 +106,12 @@ QList<Tag> TagDao::getUserTags()
     QList<Tag> tags;
     const QString sql = "SELECT * FROM tags WHERE is_system = 0 ORDER BY name";
     QSqlQuery query = executeQuery(sql);
+    
+    // 检查查询是否有效
+    if (!query.isValid() && !query.isActive()) {
+        logError("getUserTags", "查询执行失败，无法获取用户标签列表");
+        return tags;
+    }
     
     while (query.next()) {
         tags.append(createTagFromQuery(query));
@@ -116,6 +140,11 @@ QList<Tag> TagDao::searchTags(const QString& keyword)
         }
     } else {
         logError("searchTags", query.lastError().text());
+    }
+    
+    // 额外检查：如果查询对象无效，记录错误
+    if (!query.isValid() && !query.isActive() && tags.isEmpty()) {
+        logError("searchTags", "查询执行失败，无法搜索标签");
     }
     
     return tags;

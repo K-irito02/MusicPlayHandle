@@ -150,10 +150,27 @@ QVector<int> PlayInterface::getEqualizerValues() const
     return QVector<int>();
 }
 
+void PlayInterface::updatePlayModeButton(const QString& text, const QString& iconPath, const QString& tooltip)
+{
+    Q_UNUSED(text);
+    if (ui->pushButton_play_mode) {
+        // 在播放界面只显示图标，不显示文本
+        ui->pushButton_play_mode->setText("");
+        ui->pushButton_play_mode->setIcon(QIcon(iconPath));
+        ui->pushButton_play_mode->setToolTip(tooltip);
+        
+        // 确保按钮有合适的大小来显示图标
+        ui->pushButton_play_mode->setIconSize(QSize(24, 24));
+    }
+}
+
 void PlayInterface::setupConnections()
 {
     // 设置信号连接
     // 这里需要根据UI文件中的控件名称来连接
+    
+    // 连接播放模式按钮
+    connect(ui->pushButton_play_mode, &QPushButton::clicked, this, &PlayInterface::onPlayModeClicked);
 }
 
 void PlayInterface::setupUI()
@@ -202,9 +219,9 @@ void PlayInterface::onPlayPauseClicked()
     emit playPauseClicked();
 }
 
-void PlayInterface::onStopClicked()
+void PlayInterface::onPlayModeClicked()
 {
-    emit stopClicked();
+    emit playModeClicked();
 }
 
 void PlayInterface::onPreviousClicked()

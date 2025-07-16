@@ -32,6 +32,12 @@ public:
     // 获取选择的音频文件
     QStringList getSelectedFiles() const;
     
+    // 获取所有添加的音频文件
+    QStringList getAllFiles() const;
+    
+    // 获取文件标签关联信息
+    QMap<QString, QStringList> getFileTagAssignments() const;
+    
     // 获取选择的标签
     QStringList getSelectedTags() const;
     

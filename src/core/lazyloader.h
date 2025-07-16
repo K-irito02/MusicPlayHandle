@@ -12,21 +12,38 @@
 #include <memory>
 #include "constants.h"
 
+// 为了支持在信号中传递 QList<T>
+Q_DECLARE_METATYPE(QList<Tag>)
+
 /**
  * @brief 延迟加载器基类
- * @tparam T 加载的数据类型
  */
-template<typename T>
-class LazyLoader : public QObject
+class LazyLoaderBase : public QObject
 {
+    Q_OBJECT
+
+protected:
+    explicit LazyLoaderBase(QObject* parent = nullptr) : QObject(parent) {}
+    virtual ~LazyLoaderBase() = default;
+
+signals:
+    void loadError(const QString& error);
+    void dataLoaded(const QVariant& data);
+};
+
+template<typename T>
+class LazyLoader : public LazyLoaderBase
+{
+    // 移除 Q_OBJECT 宏，因为这是一个模板类
 public:
-    explicit LazyLoader(QObject* parent = nullptr)
-        : QObject(parent), m_loaded(false), m_loading(false)
-    {
-    }
+    explicit LazyLoader(QObject* parent = nullptr) : LazyLoaderBase(parent), 
+        m_loaded(false), m_loading(false) {}
     
-    virtual ~LazyLoader() = default;
-    
+    // 析构函数已移至基类
+
+    // 信号已移至基类
+
+public:
     /**
      * @brief 获取数据（如果未加载则触发加载）
      * @return 数据的常量引用
@@ -164,7 +181,7 @@ protected:
         try {
             m_data = doLoadData();
             m_loaded = true;
-            emit dataLoaded(m_data);
+            emit dataLoaded(QVariant::fromValue(m_data));
         } catch (const std::exception& e) {
             qWarning() << "LazyLoader: Failed to load data:" << e.what();
             emit loadError(QString::fromStdString(e.what()));
@@ -202,7 +219,7 @@ protected:
                 }
                 m_callbacks.clear();
                 
-                emit dataLoaded(m_data);
+                emit dataLoaded(QVariant::fromValue(m_data));
             } catch (const std::exception& e) {
                 qWarning() << "LazyLoader: Async load failed:" << e.what();
                 emit loadError(QString::fromStdString(e.what()));
@@ -214,19 +231,6 @@ protected:
         
         watcher->setFuture(future);
     }
-    
-signals:
-    /**
-     * @brief 数据加载完成信号
-     * @param data 加载的数据
-     */
-    void dataLoaded(const QList<T>& data);
-    
-    /**
-     * @brief 数据加载错误信号
-     * @param error 错误信息
-     */
-    void loadError(const QString& error);
     
 private:
     mutable QMutex m_mutex;

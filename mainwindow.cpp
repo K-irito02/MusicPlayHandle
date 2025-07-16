@@ -15,6 +15,7 @@
 #include <QTranslator>
 #include <QLocale>
 #include "src/audio/audioengine.h"
+#include <QMap>
 
 namespace {
 QTranslator* g_translator = nullptr;
@@ -24,6 +25,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_controller(nullptr)
+    , m_isPlaying(false)
+    , m_currentPlayMode(AudioTypes::PlayMode::Loop)
 {
     qDebug() << "MainWindow::MainWindow() - 开始构造主窗口";
     
@@ -42,15 +45,15 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "MainWindow::MainWindow() - 设置信号槽连接";
     setupConnections();
     
-    // 填充默认标签
-    qDebug() << "MainWindow::MainWindow() - 填充默认标签";
-    populateDefaultTags();
-    
-    // 初始化控制器
+    // 初始化控制器（controller会负责标签列表的初始化）
     if (m_controller) {
         qDebug() << "MainWindow::MainWindow() - 初始化控制器";
         m_controller->initialize();
     }
+    
+    // 注释掉populateDefaultTags()，让controller完全负责标签列表管理
+    // qDebug() << "MainWindow::MainWindow() - 填充默认标签";
+    // populateDefaultTags();
     
     // 显示状态消息
     qDebug() << "MainWindow::MainWindow() - 显示状态消息";
@@ -78,17 +81,25 @@ void MainWindow::setupConnections()
     connect(ui->actionPlayInterface, &QAction::triggered, this, &MainWindow::onActionPlayInterface);
     connect(ui->actionSettings, &QAction::triggered, this, &MainWindow::onActionSettings);
     
-    // 歌曲列表控制按钮信号连接
-    connect(ui->pushButton_play_all, &QPushButton::clicked, this, &MainWindow::onPlayAllClicked);
-    connect(ui->pushButton_shuffle, &QPushButton::clicked, this, &MainWindow::onShuffleClicked);
-    connect(ui->pushButton_repeat, &QPushButton::clicked, this, &MainWindow::onRepeatClicked);
-    connect(ui->pushButton_sort, &QPushButton::clicked, this, &MainWindow::onSortClicked);
-    connect(ui->pushButton_delete, &QPushButton::clicked, this, &MainWindow::onDeleteClicked);
+    // 歌曲列表控制按钮信号连接 - 连接到MainWindowController的新方法
+    if (m_controller) {
+        connect(ui->pushButton_play_all, &QPushButton::clicked, m_controller, &MainWindowController::onPlayAllButtonClicked);
+        connect(ui->pushButton_shuffle, &QPushButton::clicked, m_controller, &MainWindowController::onPlayModeButtonClicked);
+        connect(ui->pushButton_repeat, &QPushButton::clicked, m_controller, &MainWindowController::onSelectAllButtonClicked);
+        connect(ui->pushButton_sort, &QPushButton::clicked, m_controller, &MainWindowController::onClearSelectionButtonClicked);
+        connect(ui->pushButton_delete, &QPushButton::clicked, m_controller, &MainWindowController::onDeleteSelectedButtonClicked);
+    } else {
+        // 如果控制器未初始化，暂时连接到MainWindow的方法
+        connect(ui->pushButton_play_all, &QPushButton::clicked, this, &MainWindow::onPlayAllClicked);
+        connect(ui->pushButton_shuffle, &QPushButton::clicked, this, &MainWindow::onShuffleClicked);
+        connect(ui->pushButton_repeat, &QPushButton::clicked, this, &MainWindow::onRepeatClicked);
+        connect(ui->pushButton_sort, &QPushButton::clicked, this, &MainWindow::onSortClicked);
+        connect(ui->pushButton_delete, &QPushButton::clicked, this, &MainWindow::onDeleteClicked);
+    }
     
     // 播放控制按钮信号连接
     connect(ui->pushButton_previous, &QPushButton::clicked, this, &MainWindow::onPreviousClicked);
     connect(ui->pushButton_play_pause, &QPushButton::clicked, this, &MainWindow::onPlayPauseClicked);
-    connect(ui->pushButton_stop, &QPushButton::clicked, this, &MainWindow::onStopClicked);
     connect(ui->pushButton_next, &QPushButton::clicked, this, &MainWindow::onNextClicked);
     
     // 列表项点击信号连接
@@ -127,6 +138,9 @@ void MainWindow::setupUI()
     ui->label_total_time->setText("00:00");
     ui->label_song_title->setText("未选择歌曲");
     ui->label_song_artist->setText("未知艺术家");
+    
+    // 设置播放模式按钮初始状态（Loop模式）
+    ui->pushButton_shuffle->setText("列表循环"); // 歌曲列表右侧按钮显示文字
     
     // 设置滑块初始值
     ui->slider_progress->setRange(0, 100);
@@ -265,47 +279,121 @@ void MainWindow::onActionSettings()
 // 歌曲列表控制按钮槽函数实现
 void MainWindow::onPlayAllClicked()
 {
-    showStatusMessage("开始播放所有歌曲");
-    ui->pushButton_play_pause->setText("暂停");
-    qDebug() << "开始播放所有歌曲";
+    // 切换播放/暂停状态
+    if (m_isPlaying) {
+        // 当前正在播放，执行暂停
+        m_isPlaying = false;
+        ui->pushButton_play_all->setText("开始播放");
+        showStatusMessage("歌曲已暂停");
+        qDebug() << "歌曲暂停播放";
+        
+        // 如果有控制器，调用暂停功能
+        if (m_controller) {
+            // TODO: 调用控制器的暂停方法
+        }
+    } else {
+        // 当前未播放，执行播放
+        m_isPlaying = true;
+        ui->pushButton_play_all->setText("暂停播放");
+        showStatusMessage("开始播放歌曲");
+        qDebug() << "开始播放歌曲";
+        
+        // 如果有控制器，调用播放功能
+        if (m_controller) {
+            // TODO: 调用控制器的播放方法
+        }
+    }
 }
 
 void MainWindow::onShuffleClicked()
 {
-    showStatusMessage("随机播放模式");
-    qDebug() << "随机播放模式";
+    // 循环切换播放模式
+    switch (m_currentPlayMode) {
+        case AudioTypes::PlayMode::Loop:
+            m_currentPlayMode = AudioTypes::PlayMode::RepeatOne;
+            ui->pushButton_shuffle->setText("单曲循环");
+            showStatusMessage("播放模式：单曲循环");
+            qDebug() << "播放模式切换为：单曲循环";
+            break;
+        case AudioTypes::PlayMode::RepeatOne:
+            m_currentPlayMode = AudioTypes::PlayMode::Random;
+            ui->pushButton_shuffle->setText("随机播放");
+            showStatusMessage("播放模式：随机播放");
+            qDebug() << "播放模式切换为：随机播放";
+            break;
+        case AudioTypes::PlayMode::Random:
+            m_currentPlayMode = AudioTypes::PlayMode::Loop;
+            ui->pushButton_shuffle->setText("列表循环");
+            showStatusMessage("播放模式：列表循环");
+            qDebug() << "播放模式切换为：列表循环";
+            break;
+    }
 }
 
 void MainWindow::onRepeatClicked()
 {
-    showStatusMessage("重复播放模式");
-    qDebug() << "重复播放模式";
+    // 全选当前标签下的所有歌曲
+    if (ui->listWidget_songs->count() == 0) {
+        showStatusMessage("当前列表为空，无歌曲可选择");
+        qDebug() << "全选操作：当前列表为空";
+        return;
+    }
+    
+    // 选择所有歌曲
+    ui->listWidget_songs->selectAll();
+    int songCount = ui->listWidget_songs->count();
+    showStatusMessage(QString("已全选 %1 首歌曲").arg(songCount));
+    qDebug() << QString("全选操作完成：选中 %1 首歌曲").arg(songCount);
 }
 
 void MainWindow::onSortClicked()
 {
-    showStatusMessage("取消全选");
+    // 取消选中状态
+    int selectedCount = ui->listWidget_songs->selectedItems().count();
+    if (selectedCount == 0) {
+        showStatusMessage("当前没有选中的歌曲");
+        qDebug() << "取消全选操作：当前没有选中的歌曲";
+        return;
+    }
+    
     ui->listWidget_songs->clearSelection();
-    qDebug() << "取消全选";
+    showStatusMessage(QString("已取消选中 %1 首歌曲").arg(selectedCount));
+    qDebug() << QString("取消全选操作完成：取消选中 %1 首歌曲").arg(selectedCount);
 }
 
 void MainWindow::onDeleteClicked()
 {
+    // 删除选中状态的歌曲
     QList<QListWidgetItem*> selectedItems = ui->listWidget_songs->selectedItems();
     if (selectedItems.isEmpty()) {
         QMessageBox::information(this, "提示", "请先选择要删除的歌曲");
+        qDebug() << "删除操作：没有选中的歌曲";
         return;
     }
     
+    int selectedCount = selectedItems.size();
     int ret = QMessageBox::question(this, "确认删除", 
-                                    QString("确定要删除选中的 %1 首歌曲吗？").arg(selectedItems.size()),
+                                    QString("确定要删除选中的 %1 首歌曲吗？\n\n注意：这将从数据库中删除歌曲记录，但不会删除实际文件。").arg(selectedCount),
                                     QMessageBox::Yes | QMessageBox::No);
     
     if (ret == QMessageBox::Yes) {
+        qDebug() << QString("开始删除 %1 首选中的歌曲").arg(selectedCount);
+        
+        // 如果有控制器，调用控制器的删除方法
+        if (m_controller) {
+            // TODO: 调用控制器的批量删除歌曲方法
+            // m_controller->deleteSelectedSongs(selectedItems);
+        }
+        
+        // 临时实现：直接从UI中移除
         for (QListWidgetItem* item : selectedItems) {
             delete item;
         }
-        showStatusMessage(QString("已删除 %1 首歌曲").arg(selectedItems.size()));
+        
+        showStatusMessage(QString("已删除 %1 首歌曲").arg(selectedCount));
+        qDebug() << QString("删除操作完成：删除了 %1 首歌曲").arg(selectedCount);
+    } else {
+        qDebug() << "删除操作：用户取消删除";
     }
 }
 
@@ -337,18 +425,6 @@ void MainWindow::onPlayPauseClicked()
         }
     }
     qDebug() << "播放/暂停切换:" << ui->pushButton_play_pause->text();
-}
-
-void MainWindow::onStopClicked()
-{
-    ui->pushButton_play_pause->setText("播放");
-    ui->slider_progress->setValue(0);
-    ui->label_current_time->setText("00:00");
-    showStatusMessage("停止播放");
-    if (m_controller) {
-        m_controller->onStopButtonClicked();
-    }
-    qDebug() << "停止播放";
 }
 
 void MainWindow::onNextClicked()
@@ -448,18 +524,30 @@ void MainWindow::showAddSongDialog()
     if (dialog.getController()) {
         connect(dialog.getController(), &AddSongDialogController::tagListChanged,
                 m_controller, &MainWindowController::refreshTagList);
+        
+        // 连接标签创建信号到主界面刷新
+        connect(dialog.getController(), &AddSongDialogController::tagCreated,
+                this, [this](const QString& tagName, bool isSystemTag) {
+                    Q_UNUSED(isSystemTag)
+                    qDebug() << "[MainWindow] 接收到标签创建信号:" << tagName;
+                    if (m_controller) {
+                        m_controller->refreshTagList();
+                    }
+                });
     }
     
     // 可选：设置可用标签等
     if (dialog.exec() == QDialog::Accepted) {
-        QStringList files = dialog.getSelectedFiles();
+        QStringList files = dialog.getAllFiles(); // 获取所有添加的文件，而不是只获取选中的文件
+        QMap<QString, QStringList> fileTagAssignments = dialog.getFileTagAssignments(); // 获取文件标签关联信息
+        
         if (!files.isEmpty()) {
             showStatusMessage(QString("成功添加 %1 个音频文件").arg(files.size()));
             if (m_controller) {
-                m_controller->addSongs(files);
+                m_controller->addSongs(files, fileTagAssignments); // 传递标签关联信息
             }
         } else {
-            showStatusMessage("未选择音频文件");
+            showStatusMessage("未添加音频文件");
         }
     } else {
         showStatusMessage("已取消添加音乐");

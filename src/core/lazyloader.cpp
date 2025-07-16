@@ -116,4 +116,4 @@ QList<Song> LazySongList::doLoadData()
     return songs;
 }
 
-#include "lazyloader.moc"
+// 移除 moc 文件包含，因为 LazyLoader 是模板类

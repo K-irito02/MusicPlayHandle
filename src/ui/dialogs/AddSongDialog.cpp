@@ -78,6 +78,50 @@ QStringList AddSongDialog::getSelectedFiles() const
     return selectedFiles;
 }
 
+QStringList AddSongDialog::getAllFiles() const
+{
+    // 获取所有添加的文件列表
+    QStringList allFiles;
+    
+    for (int i = 0; i < ui->listWidget_added_songs->count(); ++i) {
+        QListWidgetItem* item = ui->listWidget_added_songs->item(i);
+        if (item) {
+            QString filePath = item->data(Qt::UserRole).toString();
+            if (!filePath.isEmpty()) {
+                allFiles.append(filePath);
+            }
+        }
+    }
+    
+    return allFiles;
+}
+
+QMap<QString, QStringList> AddSongDialog::getFileTagAssignments() const
+{
+    // 通过控制器获取文件标签关联信息
+    if (m_controller) {
+        QMap<QString, QStringList> assignments;
+        QList<FileInfo> fileInfoList = m_controller->getFileInfoList();
+        
+        for (const FileInfo& fileInfo : fileInfoList) {
+            if (!fileInfo.tagAssignment.isEmpty()) {
+                // 解析标签分配字符串（假设用逗号分隔）
+                QStringList tags = fileInfo.tagAssignment.split(",", Qt::SkipEmptyParts);
+                for (QString& tag : tags) {
+                    tag = tag.trimmed();
+                }
+                if (!tags.isEmpty()) {
+                    assignments[fileInfo.filePath] = tags;
+                }
+            }
+        }
+        
+        return assignments;
+    }
+    
+    return QMap<QString, QStringList>();
+}
+
 QStringList AddSongDialog::getSelectedTags() const
 {
     // 获取选中的标签列表
@@ -194,65 +238,26 @@ void AddSongDialog::setupUI()
 
 void AddSongDialog::updateButtonStates()
 {
-    // 更新按钮状态
-    bool hasSongs = ui->listWidget_added_songs->count() > 0;
-    bool hasSongSelected = !ui->listWidget_added_songs->selectedItems().isEmpty();
-    bool hasTagSelected = !ui->listWidget_system_tags->selectedItems().isEmpty();
-    bool canUndoOperation = m_controller && m_controller->canUndo();
-    
-    // 全选歌曲按钮 - 有歌曲时可用
-    ui->pushButton_select_all->setEnabled(hasSongs);
-    
-    // 取消选中按钮 - 有选中的歌曲时可用
-    ui->pushButton_deselect_all->setEnabled(hasSongSelected);
-    
-    // 添加歌曲按钮 - 始终可用
-    ui->pushButton_add_songs->setEnabled(true);
-    
-    // 创建标签按钮 - 始终可用
-    ui->pushButton_create_tag->setEnabled(true);
-    
-    // 删除标签按钮 - 选中可删除的标签时可用
-    bool canDeleteTag = false;
-    if (hasTagSelected) {
-        QList<QListWidgetItem*> selectedItems = ui->listWidget_system_tags->selectedItems();
-        for (QListWidgetItem* item : selectedItems) {
-            if (item) {
-                TagListItem* tagItem = qobject_cast<TagListItem*>(ui->listWidget_system_tags->itemWidget(item));
-                if (tagItem && tagItem->isDeletable()) {
-                    canDeleteTag = true;
-                    break;
-                }
-            }
-        }
+    if (!ui) {
+        return;
     }
-    ui->pushButton_delete_tag->setEnabled(canDeleteTag);
     
-    // 编辑标签按钮 - 选中可编辑的标签时可用
-    bool canEditTag = false;
-    if (hasTagSelected) {
-        QList<QListWidgetItem*> selectedItems = ui->listWidget_system_tags->selectedItems();
-        for (QListWidgetItem* item : selectedItems) {
-            if (item) {
-                TagListItem* tagItem = qobject_cast<TagListItem*>(ui->listWidget_system_tags->itemWidget(item));
-                if (tagItem && tagItem->isEditable()) {
-                    canEditTag = true;
-                    break;
-                }
-            }
-        }
-    }
-    ui->pushButton_edit_tag->setEnabled(canEditTag);
+    // 简化的按钮状态更新
+    bool hasSongs = ui->listWidget_added_songs && ui->listWidget_added_songs->count() > 0;
+    bool hasSongSelected = ui->listWidget_added_songs && !ui->listWidget_added_songs->selectedItems().isEmpty();
+    bool hasTagSelected = ui->listWidget_system_tags && !ui->listWidget_system_tags->selectedItems().isEmpty();
     
-    // 加入标签按钮 - 需要同时选中歌曲和标签
-    ui->pushButton_add_to_tag->setEnabled(hasSongSelected && hasTagSelected);
-    
-    // 撤回加入按钮 - 需要有可撤销的操作
-    ui->pushButton_undo_add->setEnabled(canUndoOperation);
-    
-    // 退出按钮 - 始终可用
-    ui->pushButton_exit_discard->setEnabled(true);
-    ui->pushButton_exit_save->setEnabled(true);
+    // 基本按钮状态
+    if (ui->pushButton_select_all) ui->pushButton_select_all->setEnabled(hasSongs);
+    if (ui->pushButton_deselect_all) ui->pushButton_deselect_all->setEnabled(hasSongSelected);
+    if (ui->pushButton_add_songs) ui->pushButton_add_songs->setEnabled(true);
+    if (ui->pushButton_create_tag) ui->pushButton_create_tag->setEnabled(true);
+    if (ui->pushButton_delete_tag) ui->pushButton_delete_tag->setEnabled(hasTagSelected);
+    if (ui->pushButton_edit_tag) ui->pushButton_edit_tag->setEnabled(hasTagSelected);
+    if (ui->pushButton_add_to_tag) ui->pushButton_add_to_tag->setEnabled(hasSongSelected && hasTagSelected);
+    if (ui->pushButton_undo_add) ui->pushButton_undo_add->setEnabled(false); // 简化为禁用
+    if (ui->pushButton_exit_discard) ui->pushButton_exit_discard->setEnabled(true);
+    if (ui->pushButton_exit_save) ui->pushButton_exit_save->setEnabled(true);
 }
 
 void AddSongDialog::showStatusMessage(const QString& message)
@@ -391,9 +396,18 @@ void AddSongDialog::onUndoAssignClicked()
 void AddSongDialog::onExitSaveClicked()
 {
     // 退出并保存按钮点击
+    if (!ui) {
+        qWarning() << "UI is null in onExitSaveClicked";
+        return;
+    }
+    
     if (m_controller) {
         // 确认保存操作
-        int fileCount = ui->listWidget_added_songs->count();
+        int fileCount = 0;
+        if (ui->listWidget_added_songs) {
+            fileCount = ui->listWidget_added_songs->count();
+        }
+        
         if (fileCount > 0) {
             QMessageBox::StandardButton reply = QMessageBox::question(this, 
                                                                    "确认保存", 

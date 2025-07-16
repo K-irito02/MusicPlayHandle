@@ -96,6 +96,11 @@ private:
     bool createTagsTable();
     
     /**
+     * @brief 创建歌曲-标签关联表
+     */
+    bool createSongTagsTable();
+    
+    /**
      * @brief 创建日志表
      */
     bool createLogsTable();
@@ -104,6 +109,16 @@ private:
      * @brief 插入初始数据
      */
     bool insertInitialData();
+    
+    /**
+     * @brief 清理多余标签，只保留系统标签
+     */
+    bool cleanupExtraTags();
+    
+    /**
+     * @brief 检查并修复系统标签
+     */
+    bool checkAndFixSystemTags();
     
     /**
      * @brief 记录错误信息

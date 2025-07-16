@@ -23,7 +23,6 @@ class PlaylistDao;
 
 // 播放模式
 enum class PlayMode {
-    Sequential,     // 顺序播放
     Loop,          // 列表循环
     SingleLoop,    // 单曲循环
     Random,        // 随机播放

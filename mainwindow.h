@@ -7,6 +7,10 @@
 #include <QListWidgetItem>
 #include "src/ui/widgets/taglistitem.h"
 
+#include "src/audio/audiotypes.h"
+
+// 使用AudioTypes命名空间中的PlayMode枚举
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -48,7 +52,6 @@ private slots:
     // 播放控制按钮槽函数
     void onPreviousClicked();
     void onPlayPauseClicked();
-    void onStopClicked();
     void onNextClicked();
     
     // 列表项点击事件
@@ -73,6 +76,10 @@ private slots:
 private:
     Ui::MainWindow *ui;
     MainWindowController* m_controller;
+    
+    // 播放状态相关
+    bool m_isPlaying;           // 当前是否正在播放
+    AudioTypes::PlayMode m_currentPlayMode; // 当前播放模式
     
     // 初始化方法
     void setupConnections();

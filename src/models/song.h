@@ -249,6 +249,13 @@ private:
     QString extractFileName(const QString& filePath) const;
     
     /**
+     * @brief 提取基本音频元数据
+     * @param song 要设置元数据的Song对象
+     * @param filePath 音频文件路径
+     */
+    static void extractBasicMetadata(Song& song, const QString& filePath);
+    
+    /**
      * @brief 格式化时间
      * @param milliseconds 毫秒
      * @return 格式化的时间字符串

@@ -387,4 +387,4 @@ using PooledByteArray = PooledObject<QByteArray>;
  */
 #define ACQUIRE_BYTE_ARRAY() PooledByteArray(getByteArrayPool())
 
-#include "objectpool.moc"
+// 移除 moc 文件包含，因为 ObjectPool 是模板类

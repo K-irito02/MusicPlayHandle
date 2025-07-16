@@ -1,10 +1,11 @@
 ## 🎵 Qt6音频播放器项目
 
-基于Qt6和C++17开发的现代化音频播放器应用程序，采用分层架构和组件化设计，集成了先进的标签管理系统和性能
+基于Qt6和C++17开发的现代化音频播放器应用程序，采用分层架构和组件化设计，集成了先进的标签管理系统和性能优化技术。
+
 ### 🔗 **项目信息**
 
 - **名称**: Qt6音频播放器 (`MusicPlayHandle`)
-- **版本**: 1.0.0 (主版本.次版本.补丁)
+- **版本**: 0.1.0 (主版本.次版本.补丁)
 - **组织**: Qt6音频播放器开发团队
 - **域名**: musicPlayHandle.qt6.org
 - **描述**: Modern Qt6 Music Player with Advanced Tag Management
@@ -87,7 +88,6 @@
   - `Constants` - 系统常量定义
 
 ### 📂 **项目文件结构**
-
 ```
 MusicPlayHandle/
 ├── .clang-format             # 代码格式化配置
@@ -106,10 +106,28 @@ MusicPlayHandle/
 │   └── optimization_usage_example.cpp  # 优化使用示例
 ├── images/                  # UI图标资源
 │   ├── addMusicIcon.png     # 添加音乐图标
-│   ├── playIcon.png         # 播放图标
-│   ├── pauseIcon.png        # 暂停图标
+│   ├── addToListIcon.png    # 添加到列表图标
 │   ├── applicationIcon.png  # 应用程序图标
-│   └── ...                  # 其他UI图标 (20+个)
+│   ├── copyIcon.png         # 复制图标
+│   ├── createIcon.png       # 创建图标
+│   ├── deleteIcon.png       # 删除图标
+│   ├── editLabel.png        # 编辑标签图标
+│   ├── exit-SaveIcon.png    # 退出保存图标
+│   ├── exit-discardChangesIcon.png  # 退出丢弃更改图标
+│   ├── fastForwardIcon.png  # 快进图标
+│   ├── followingSongIcon.png # 下一首歌图标
+│   ├── lastSongIcon.png     # 上一首歌图标
+│   ├── listCycle.png        # 列表循环图标
+│   ├── manageIcon.png       # 管理图标
+│   ├── moveIcon.png         # 移动图标
+│   ├── pauseIcon.png        # 暂停图标
+│   ├── playIcon.png         # 播放图标
+│   ├── playlistIcon.png     # 播放列表图标
+│   ├── reverseIcon.png      # 倒退图标
+│   ├── shufflePlay.png      # 随机播放图标
+│   ├── singleCycle.png      # 单曲循环图标
+│   ├── stopIcon.png         # 停止图标
+│   └── undoIcon.png         # 撤销图标
 ├── src/                     # 源码主目录
 │   ├── audio/               # 音频引擎模块
 │   │   ├── audioengine.h/cpp  # 音频播放引擎
@@ -149,8 +167,8 @@ MusicPlayHandle/
 │   │   ├── errorlog.h/cpp   # 错误日志模型
 │   │   └── systemlog.h/cpp  # 系统日志模型
 │   ├── threading/           # 多线程管理
-│   │   ├── audioworkerthread.h  # 音频工作线程
-│   │   └── mainthreadmanager.h  # 主线程管理
+│   │   ├── audioworkerthread.h/cpp  # 音频工作线程
+│   │   └── mainthreadmanager.h/cpp  # 主线程管理
 │   └── ui/                  # 用户界面组件
 │       ├── controllers/     # UI控制器
 │       │   ├── MainWindowController.h/cpp
@@ -165,11 +183,11 @@ MusicPlayHandle/
 │       │   └── SettingsDialog.h/cpp
 │       └── widgets/         # 自定义控件
 │           ├── taglistitem.h/cpp
-│           └── taglistitemfactory.h
+│           └── taglistitemfactory.h/cpp
 ├── tests/                   # 测试代码
 │   ├── test_tagmanager.h/cpp  # 标签管理完整测试套件
-│   ├── test_addsong_dialog.cpp # 添加歌曲对话框测试
-│   └── test_compile_fix.cpp    # 编译修复测试
+│   ├── test_tag_fix.cpp     # 标签修复测试
+│   └── debug_test.cpp       # 调试测试
 ├── translations/            # 国际化文件
 │   └── en_US.ts            # 英文翻译
 ├── *.ui                    # Qt Designer UI文件
@@ -182,20 +200,36 @@ MusicPlayHandle/
 ├── icon.qrc                # Qt资源文件
 ├── 笔记/                    # 开发笔记
 │   └── 智能体角色/          # AI助手角色定义
+│       ├── Qt 6 MusicPlayHandle 开发助手.md
+│       ├── Qt 6 开发专家.md
+│       └── Qt 6 报错解决专家.md
 └── 设计文档/                # 项目设计文档
     ├── 功能设计/            # 功能设计文档 v0.1-0.2
+    │   ├── 功能设计0.1.md
+    │   └── 功能设计0.2.md
     ├── 多线程设计/          # 多线程设计文档 v0.1-0.2
+    │   ├── 多线程设计0.1.md
+    │   └── 多线程设计0.2.md
     ├── 数据库设计/          # 数据库设计文档 v0.1-0.2
+    │   ├── 数据库设计0.1.md
+    │   └── 数据库设计0.2.md
     ├── 界面设计/            # UI设计文档和原型图
+    │   ├── 主界面.png
+    │   ├── 歌曲播放界面.png
+    │   ├── 添加歌曲界面.png
+    │   └── 管理标签界面.png
     └── 设计模式选择/        # 设计模式应用文档
+    ├── 设计模式0.1.md
+    └── 设计模式0.2.md
 ```
+
 
 ### 🚀 **功能特性**
 
 1. **音频播放系统**  <!-- 完整的音频播放引擎实现 -->
    - ✅ 支持多种音频格式 (MP3, WAV, FLAC, OGG等)
    - ✅ 完整播放控制 (播放/暂停/停止/跳转/音量)
-   - ✅ 多种播放模式 (顺序/循环/单曲循环/随机)
+   - ✅ 多种播放模式 (列表循环/单曲循环/随机播放)
    - ✅ 播放列表管理和播放历史
    - ✅ 线程安全的音频处理
    - ✅ 实时播放状态监控
@@ -273,8 +307,8 @@ cmake ..
 cmake --build .
 
 # 运行程序
-./MusicPlayHandle  # Linux/macOS
 .\MusicPlayHandle.exe  # Windows
+./MusicPlayHandle      # Linux/macOS
 ```
 
 **使用 qmake:**
@@ -283,9 +317,9 @@ cmake --build .
 qmake musicPlayHandle.pro
 
 # 编译项目
-make  # Linux/macOS
-nmake  # Windows (MSVC)
 mingw32-make  # Windows (MinGW)
+make          # Linux/macOS
+nmake         # Windows (MSVC)
 ```
 
 **使用 Qt Creator:**
@@ -319,7 +353,7 @@ mingw32-make  # Windows (MinGW)
 
 #### 🎵 音频技术
 - **多格式支持**: 支持主流音频格式 (MP3, WAV, FLAC, OGG)
-- **播放模式**: 顺序、循环、单曲循环、随机播放
+- **播放模式**: 列表循环、单曲循环、随机播放 (三种模式)
 - **实时监控**: 播放状态、进度、音量的实时反馈
 - **线程安全**: 音频引擎的线程安全设计
 
@@ -330,17 +364,20 @@ mingw32-make  # Windows (MinGW)
 - [x] **数据库系统**: SQLite集成、DAO层、事务管理
 - [x] **标签管理**: 完整的CRUD操作、系统标签、用户标签
 - [x] **播放列表**: 基础播放列表管理功能
-- [x] **音频引擎**: 基础播放控制、多格式支持、播放模式
+- [x] **音频引擎**: 基础播放控制、多格式支持、三种播放模式(列表循环/单曲循环/随机播放)
 - [x] **依赖注入**: ServiceContainer IoC容器
 - [x] **性能优化**: LRU缓存、对象池、延迟加载
 - [x] **错误处理**: Result<T>模板、统一错误管理
 - [x] **日志系统**: 结构化日志、异步写入、多级别
-- [x] **单元测试**: TagManager完整测试覆盖
-- [x] **UI控制器**: MVC架构的控制器层
+- [x] **单元测试**: TagManager完整测试覆盖、标签修复测试、调试测试
+- [x] **UI控制器**: MVC架构的控制器层(MainWindowController、AddSongDialogController、ManageTagDialogController、PlayInterfaceController)
+- [x] **UI对话框**: 完整的对话框实现(AddSongDialog、CreateTagDialog、ManageTagDialog、PlayInterface、SettingsDialog)
+- [x] **自定义控件**: 标签列表项控件(TagListItem)和工厂(TagListItemFactory)
+- [x] **UI资源**: 完整的图标资源集合，包含播放模式图标(listCycle.png、singleCycle.png、shufflePlay.png)
 
 #### 🚧 开发中功能 (UI完善)
 - [ ] **主窗口界面**: 播放控制界面优化
-- [ ] **标签管理界面**: 标签编辑、歌曲关联界面
+- [ ] **标签管理界面**: 标签编辑、歌曲关联界面完善
 - [ ] **播放列表界面**: 列表显示、拖拽排序
 - [ ] **设置界面**: 应用配置、主题设置
 - [ ] **响应式设计**: 自适应布局、多分辨率支持

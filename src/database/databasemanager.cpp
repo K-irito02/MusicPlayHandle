@@ -78,7 +78,16 @@ bool DatabaseManager::initialize(const QString& dbPath)
         closeDatabase();
         return false;
     }
-    
+
+    // 检查并修复系统标签
+    qDebug() << "开始检查系统标签";
+    if (!checkAndFixSystemTags()) {
+        logError("检查系统标签失败");
+        // 不返回false，因为这不是致命错误
+    } else {
+        qDebug() << "系统标签检查完成";
+    }
+
     m_initialized = true;
     qDebug() << "数据库初始化完成";
     return true;
@@ -99,6 +108,8 @@ QSqlQuery DatabaseManager::executeQuery(const QString& queryStr)
     QSqlQuery query(database());
     if (!query.exec(queryStr)) {
         logError("查询执行失败: " + query.lastError().text() + " SQL: " + queryStr);
+        // 返回一个无效的查询对象
+        return QSqlQuery();
     }
     return query;
 }
@@ -132,6 +143,10 @@ bool DatabaseManager::createTables()
     }
     
     if (!createTagsTable()) {
+        return false;
+    }
+    
+    if (!createSongTagsTable()) {
         return false;
     }
     
@@ -218,6 +233,43 @@ bool DatabaseManager::createTagsTable()
     return true;
 }
 
+bool DatabaseManager::createSongTagsTable()
+{
+    const QString createSongTagsSQL = R"(
+        CREATE TABLE IF NOT EXISTS song_tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            song_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+            UNIQUE(song_id, tag_id)
+        )
+    )";
+    
+    if (!executeUpdate(createSongTagsSQL)) {
+        logError("创建song_tags表失败");
+        return false;
+    }
+    
+    // 创建索引以提高查询性能
+    const QStringList indexes = {
+        "CREATE INDEX IF NOT EXISTS idx_song_tags_song_id ON song_tags(song_id)",
+        "CREATE INDEX IF NOT EXISTS idx_song_tags_tag_id ON song_tags(tag_id)",
+        "CREATE INDEX IF NOT EXISTS idx_song_tags_added_at ON song_tags(added_at)"
+    };
+    
+    for (const QString& indexSQL : indexes) {
+        if (!executeUpdate(indexSQL)) {
+            logError("创建song_tags表索引失败: " + indexSQL);
+            return false;
+        }
+    }
+    
+    qDebug() << "song_tags表创建成功";
+    return true;
+}
+
 bool DatabaseManager::createLogsTable()
 {
     const QString createLogsSQL = R"(
@@ -256,33 +308,106 @@ bool DatabaseManager::insertInitialData()
 {
     qDebug() << "开始插入初始数据";
     
-    // 检查是否已有系统标签
-    QSqlQuery checkQuery = executeQuery("SELECT COUNT(*) FROM tags WHERE is_system = 1");
-    if (checkQuery.next() && checkQuery.value(0).toInt() > 0) {
-        qDebug() << "系统标签已存在，跳过初始数据插入";
-        return true;
+    // 先清理多余的标签，只保留三个系统标签
+    if (!cleanupExtraTags()) {
+        logError("清理多余标签失败");
+        return false;
     }
     
-    // 插入系统默认标签
+    // 检查并创建必需的系统标签
     const QStringList systemTags = {
-        "('流行', '#e74c3c', '流行音乐', 1)",
-        "('摇滚', '#9b59b6', '摇滚音乐', 1)",
-        "('古典', '#3498db', '古典音乐', 1)",
-        "('爵士', '#f39c12', '爵士音乐', 1)",
-        "('电子', '#1abc9c', '电子音乐', 1)",
-        "('民谣', '#27ae60', '民谣音乐', 1)",
-        "('收藏', '#e67e22', '收藏的歌曲', 1)"
+        "('我的歌曲', '#4CAF50', '所有歌曲的默认标签', 1)",
+        "('最近播放', '#2196F3', '最近播放的歌曲', 1)",
+        "('我的收藏', '#FF9800', '收藏的歌曲', 1)"
     };
     
     for (const QString& tagData : systemTags) {
+        // 提取标签名称进行检查
+        QString tagName = tagData.split("'")[1];
+        
+        // 检查标签是否已存在
+        QSqlQuery checkQuery = executeQuery(QString("SELECT COUNT(*) FROM tags WHERE name = '%1'").arg(tagName));
+        if (checkQuery.next() && checkQuery.value(0).toInt() > 0) {
+            qDebug() << "系统标签已存在，跳过:" << tagName;
+            continue;
+        }
+        
         QString insertSQL = "INSERT INTO tags (name, color, description, is_system) VALUES " + tagData;
         if (!executeUpdate(insertSQL)) {
             logError("插入系统标签失败: " + tagData);
             return false;
         }
+        qDebug() << "插入系统标签成功:" << tagName;
     }
     
     qDebug() << "初始数据插入完成";
+    return true;
+}
+
+bool DatabaseManager::cleanupExtraTags()
+{
+    qDebug() << "开始清理多余标签";
+    
+    // 定义需要保留的系统标签
+    const QStringList requiredSystemTags = {"我的歌曲", "最近播放", "我的收藏"};
+    
+    // 构建删除SQL，删除不在必需列表中的所有标签
+    QString deleteSQL = "DELETE FROM tags WHERE name NOT IN ('我的歌曲', '最近播放', '我的收藏')";
+    
+    if (!executeUpdate(deleteSQL)) {
+        logError("清理多余标签失败");
+        return false;
+    }
+    
+    // 查询剩余标签数量
+    QSqlQuery countQuery = executeQuery("SELECT COUNT(*) FROM tags");
+    if (countQuery.next()) {
+        int remainingCount = countQuery.value(0).toInt();
+        qDebug() << "清理完成，剩余标签数量:" << remainingCount;
+    }
+    
+    return true;
+}
+
+bool DatabaseManager::checkAndFixSystemTags()
+{
+    qDebug() << "检查并修复系统标签";
+    
+    // 检查必需的系统标签是否存在
+    const QStringList requiredSystemTags = {"我的歌曲", "最近播放", "我的收藏"};
+    
+    for (const QString& tagName : requiredSystemTags) {
+        QSqlQuery checkQuery = executeQuery(QString("SELECT COUNT(*) FROM tags WHERE name = '%1' AND is_system = 1").arg(tagName));
+        
+        if (!checkQuery.isValid() || !checkQuery.next() || checkQuery.value(0).toInt() == 0) {
+            qDebug() << "系统标签缺失，正在添加:" << tagName;
+            
+            // 根据标签名称设置颜色和描述
+            QString color, description;
+            if (tagName == "我的歌曲") {
+                color = "#4CAF50";
+                description = "所有歌曲的默认标签";
+            } else if (tagName == "最近播放") {
+                color = "#2196F3";
+                description = "最近播放的歌曲";
+            } else if (tagName == "我的收藏") {
+                color = "#FF9800";
+                description = "收藏的歌曲";
+            }
+            
+            QString insertSQL = QString("INSERT INTO tags (name, color, description, is_system) VALUES ('%1', '%2', '%3', 1)")
+                               .arg(tagName, color, description);
+            
+            if (!executeUpdate(insertSQL)) {
+                logError("添加系统标签失败: " + tagName);
+                return false;
+            }
+            
+            qDebug() << "系统标签添加成功:" << tagName;
+        }
+    }
+    
+    qDebug() << "系统标签检查完成";
     return true;
 }
 

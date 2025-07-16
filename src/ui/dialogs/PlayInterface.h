@@ -57,12 +57,15 @@ public:
     // 均衡器
     void setEqualizerValues(const QVector<int>& values);
     QVector<int> getEqualizerValues() const;
+    
+    // 播放模式相关
+    void updatePlayModeButton(const QString& text, const QString& iconPath, const QString& tooltip);
 
     bool isMuted() const { return m_isMuted; }
 
 signals:
     void playPauseClicked();
-    void stopClicked();
+    void playModeClicked();
     void previousClicked();
     void nextClicked();
     void volumeChanged(int volume);
@@ -74,7 +77,7 @@ signals:
 
 private slots:
     void onPlayPauseClicked();
-    void onStopClicked();
+    void onPlayModeClicked();
     void onPreviousClicked();
     void onNextClicked();
     void onVolumeSliderChanged(int value);
@@ -115,4 +118,4 @@ private:
     QString formatTime(qint64 milliseconds) const;
 };
 
-#endif // PLAYINTERFACE_H 
+#endif // PLAYINTERFACE_H
