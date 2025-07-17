@@ -25,7 +25,8 @@ enum class AudioCommandType {
     SetVolume,
     SetMuted,
     LoadMedia,
-    ApplyEffects
+    ApplyEffects,
+    SetPlayMode
 };
 
 // 音频命令结构
@@ -86,6 +87,7 @@ private:
 // 音频工作线程
 class AudioWorkerThread : public QThread {
     Q_OBJECT
+    Q_DISABLE_COPY(AudioWorkerThread)
     
 public:
     explicit AudioWorkerThread(QObject* parent = nullptr);
@@ -120,6 +122,9 @@ public:
     // 缓冲区管理
     void setBufferSize(int size);
     int bufferSize() const;
+
+    // 命令队列操作
+    void enqueueCommand(const AudioCommand& cmd);
     
     // 线程状态
     enum class ThreadState {
@@ -131,7 +136,9 @@ public:
     
     ThreadState threadState() const;
     
-signals:
+    qint64 calculateCacheSize() const;
+    
+Q_SIGNALS:
     // 播放状态信号
     void audioLoaded(const Song& song);
     void playbackStarted(const QString& filePath);
@@ -182,14 +189,13 @@ private slots:
 private:
     // 线程控制
     QMutex m_mutex;
-    QWaitCondition m_waitCondition;
+    QWaitCondition m_commandQueueCondition;
     bool m_running;
     bool m_shouldStop;
     ThreadState m_threadState;
     
     // 命令队列
     QQueue<AudioCommand> m_commandQueue;
-    QMutex m_commandMutex;
     
     // 音频组件
     QMediaPlayer* m_mediaPlayer;
@@ -281,4 +287,4 @@ private:
     QString getAudioFormat(const QString& filePath) const;
 };
 
-#endif // AUDIOWORKERTHREAD_H 
+#endif // AUDIOWORKERTHREAD_H

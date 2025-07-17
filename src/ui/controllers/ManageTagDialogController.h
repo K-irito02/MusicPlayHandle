@@ -194,7 +194,6 @@ signals:
     // 数据更新信号
     void dataLoaded();
     void dataRefreshed();
-    void uiRefreshed();
     void statisticsUpdated(const QList<TagDialogStatistics>& stats);
     
     // 进度信号
@@ -207,6 +206,7 @@ signals:
     void warningOccurred(const QString& warning);
     void dialogAccepted();
     void dialogRejected();
+    void uiRefreshed();
 
 public slots:
     // 标签选择槽
@@ -250,11 +250,6 @@ public slots:
     // 歌曲传输（由 ManageTagDialog 调用）
     void transferSongs(const QString& fromTag, const QString& toTag, bool copy);
     void updateStatistics();
-    void refreshUI();
-    
-    // 添加缺少的操作方法声明
-    void logWarning(const QString& message);
-    void cleanupOperationHistory();
 
 private slots:
     void onDataUpdateTimer();
@@ -368,6 +363,9 @@ private:
     void logInfo(const QString& message);
     void logError(const QString& error);
     void logDebug(const QString& message);
+    void logWarning(const QString& warning);
+    void refreshUI();
+    void cleanupOperationHistory();
     
     // 常量
     static const int MAX_HISTORY_SIZE = 100;
@@ -381,17 +379,14 @@ private:
     void resetOperations();
     void undoOperation();
     void redoOperation();
-    
-    // 添加缺少的撤销重做操作方法
     bool undoCreateTag(const TagDialogOperation& operation);
     bool undoDeleteTag(const TagDialogOperation& operation);
     bool undoRenameTag(const TagDialogOperation& operation);
     bool undoTransferSongs(const TagDialogOperation& operation);
-    
     bool redoCreateTag(const TagDialogOperation& operation);
     bool redoDeleteTag(const TagDialogOperation& operation);
     bool redoRenameTag(const TagDialogOperation& operation);
     bool redoTransferSongs(const TagDialogOperation& operation);
 };
 
-#endif // MANAGETAGDIALOGCONTROLLER_H
+#endif // MANAGETAGDIALOGCONTROLLER_H 

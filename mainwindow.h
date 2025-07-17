@@ -44,7 +44,6 @@ private slots:
     
     // 歌曲列表控制按钮槽函数
     void onPlayAllClicked();
-    void onShuffleClicked();
     void onRepeatClicked();
     void onSortClicked();
     void onDeleteClicked();

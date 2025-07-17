@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "src/core/applicationmanager.h"
 #include "src/core/logger.h"
+#include "src/models/song.h"
 #include "version.h"
 
 #include <QApplication>
@@ -18,6 +19,7 @@
 #include <QPixmap>
 #include <QTimer>
 #include <QEventLoop>
+#include <QMetaType>
 
 // 所有初始化和清理工作现在由ApplicationManager处理
 
@@ -25,6 +27,9 @@ int main(int argc, char *argv[])
 {
     // Qt6中高DPI支持已默认启用，无需手动设置
     QApplication app(argc, argv);
+    
+    // 注册自定义元类型
+    qRegisterMetaType<Song>("Song");
     
     // 设置应用程序基本信息
     app.setApplicationName("Qt6音频播放器");

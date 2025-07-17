@@ -84,14 +84,13 @@ void MainWindow::setupConnections()
     // 歌曲列表控制按钮信号连接 - 连接到MainWindowController的新方法
     if (m_controller) {
         connect(ui->pushButton_play_all, &QPushButton::clicked, m_controller, &MainWindowController::onPlayAllButtonClicked);
-        connect(ui->pushButton_shuffle, &QPushButton::clicked, m_controller, &MainWindowController::onPlayModeButtonClicked);
         connect(ui->pushButton_repeat, &QPushButton::clicked, m_controller, &MainWindowController::onSelectAllButtonClicked);
         connect(ui->pushButton_sort, &QPushButton::clicked, m_controller, &MainWindowController::onClearSelectionButtonClicked);
         connect(ui->pushButton_delete, &QPushButton::clicked, m_controller, &MainWindowController::onDeleteSelectedButtonClicked);
     } else {
         // 如果控制器未初始化，暂时连接到MainWindow的方法
         connect(ui->pushButton_play_all, &QPushButton::clicked, this, &MainWindow::onPlayAllClicked);
-        connect(ui->pushButton_shuffle, &QPushButton::clicked, this, &MainWindow::onShuffleClicked);
+
         connect(ui->pushButton_repeat, &QPushButton::clicked, this, &MainWindow::onRepeatClicked);
         connect(ui->pushButton_sort, &QPushButton::clicked, this, &MainWindow::onSortClicked);
         connect(ui->pushButton_delete, &QPushButton::clicked, this, &MainWindow::onDeleteClicked);
@@ -140,7 +139,8 @@ void MainWindow::setupUI()
     ui->label_song_artist->setText("未知艺术家");
     
     // 设置播放模式按钮初始状态（Loop模式）
-    ui->pushButton_shuffle->setText("列表循环"); // 歌曲列表右侧按钮显示文字
+    ui->pushButton_play_pause->setText("播放");
+
     
     // 设置滑块初始值
     ui->slider_progress->setRange(0, 100);
@@ -305,30 +305,7 @@ void MainWindow::onPlayAllClicked()
     }
 }
 
-void MainWindow::onShuffleClicked()
-{
-    // 循环切换播放模式
-    switch (m_currentPlayMode) {
-        case AudioTypes::PlayMode::Loop:
-            m_currentPlayMode = AudioTypes::PlayMode::RepeatOne;
-            ui->pushButton_shuffle->setText("单曲循环");
-            showStatusMessage("播放模式：单曲循环");
-            qDebug() << "播放模式切换为：单曲循环";
-            break;
-        case AudioTypes::PlayMode::RepeatOne:
-            m_currentPlayMode = AudioTypes::PlayMode::Random;
-            ui->pushButton_shuffle->setText("随机播放");
-            showStatusMessage("播放模式：随机播放");
-            qDebug() << "播放模式切换为：随机播放";
-            break;
-        case AudioTypes::PlayMode::Random:
-            m_currentPlayMode = AudioTypes::PlayMode::Loop;
-            ui->pushButton_shuffle->setText("列表循环");
-            showStatusMessage("播放模式：列表循环");
-            qDebug() << "播放模式切换为：列表循环";
-            break;
-    }
-}
+
 
 void MainWindow::onRepeatClicked()
 {

@@ -5,9 +5,6 @@
 #include <QString>
 #include <QStringList>
 
-/**
- * @brief 音频引擎相关的枚举类型和基础类型定义
- */
 namespace AudioTypes {
 
 /**

@@ -43,6 +43,7 @@ SOURCES += \
     src/models/errorlog.cpp \
     src/models/systemlog.cpp \
     src/audio/audioengine.cpp \
+    src/threading/audioworkerthread.cpp \
     src/core/applicationmanager.cpp
 
 HEADERS += \
@@ -50,6 +51,7 @@ HEADERS += \
     src/managers/tagmanager.h \
     src/managers/playlistmanager.h \
     version.h \
+    src/threading/audioworkerthread.h \
     src/core/appconfig.h \
     src/core/logger.h \
     src/database/databasemanager.h \

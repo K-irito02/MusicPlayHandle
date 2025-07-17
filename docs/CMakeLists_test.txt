@@ -1,0 +1,65 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(MusicPlayHandleTest VERSION 1.0.0 LANGUAGES CXX)
+
+# 设置C++标准
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 查找Qt6
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia)
+
+# 启用Qt的MOC
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
+
+# 包含目录
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+# 源文件
+set(SOURCES
+    test_audio.cpp
+    src/audio/audioengine.cpp
+    src/models/song.cpp
+)
+
+# 头文件
+set(HEADERS
+    src/audio/audioengine.h
+    src/models/song.h
+)
+
+# 创建可执行文件
+add_executable(MusicPlayHandleTest ${SOURCES} ${HEADERS})
+
+# 链接Qt库
+target_link_libraries(MusicPlayHandleTest
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Multimedia
+)
+
+# 设置输出目录
+set_target_properties(MusicPlayHandleTest PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+# 调试信息
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(MusicPlayHandleTest PRIVATE QT_QML_DEBUG)
+endif()
+
+# 编译选项
+if(MSVC)
+    target_compile_options(MusicPlayHandleTest PRIVATE /W3)
+else()
+    target_compile_options(MusicPlayHandleTest PRIVATE -Wall -Wextra)
+endif()
+
+# 打印配置信息
+message(STATUS "Qt6 Core found: ${Qt6Core_FOUND}")
+message(STATUS "Qt6 Widgets found: ${Qt6Widgets_FOUND}")
+message(STATUS "Qt6 Multimedia found: ${Qt6Multimedia_FOUND}")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")

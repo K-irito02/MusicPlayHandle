@@ -161,7 +161,7 @@ public:
 
 signals:
     // 播放控制信号
-    void playRequested();
+    void playRequested(const Song& song);
     void pauseRequested();
     void playModeChangeRequested();
     void nextRequested();

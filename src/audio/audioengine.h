@@ -8,9 +8,11 @@
 #include <QTimer>
 #include <QMutex>
 #include <QList>
+#include <QRecursiveMutex>
 
 #include "../models/song.h"
 #include "audiotypes.h"
+#include "../threading/audioworkerthread.h"
 
 // 前向声明
 class Logger;
@@ -77,6 +79,7 @@ signals:
     void durationChanged(qint64 duration);
     void volumeChanged(int volume);
     void mutedChanged(bool muted);
+    void playbackStateChanged(int state);
     
     // 播放列表信号
     void currentSongChanged(const Song& song);
@@ -98,6 +101,7 @@ signals:
     void speedChanged(double speed);
     
 private slots:
+    void handlePlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void onPositionChanged(qint64 position);
     void onDurationChanged(qint64 duration);
     void onStateChanged(QMediaPlayer::PlaybackState state);
@@ -120,8 +124,10 @@ private:
     static QMutex m_instanceMutex;
     
     // 核心音频组件
-    QMediaPlayer* m_player;
+    QMediaPlayer* m_player = nullptr;
+    qreal m_currentVolume = 50.0;
     QAudioOutput* m_audioOutput;
+    AudioWorkerThread* m_audioWorker;
     
     // 播放状态
     AudioTypes::AudioState m_state;
@@ -150,7 +156,7 @@ private:
     QTimer* m_bufferTimer;
     
     // 线程安全
-    mutable QMutex m_mutex;
+    mutable QRecursiveMutex m_mutex;
     
     // 支持的音频格式
     static QStringList m_supportedFormats;
@@ -207,4 +213,4 @@ public:
     static double calculatePeak(const QByteArray& audioData);
 };
 
-#endif // AUDIOENGINE_H 
+#endif // AUDIOENGINE_H

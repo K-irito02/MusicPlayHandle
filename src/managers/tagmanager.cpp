@@ -45,6 +45,7 @@ void TagManager::shutdown() {}
 
 TagOperationResult TagManager::createTag(const QString& name, const QString& description, const QColor& color, const QPixmap& icon)
 {
+    Q_UNUSED(icon);
     qDebug() << "[TagManager] createTag: 开始创建标签:" << name;
     
     // 检查标签是否已存在

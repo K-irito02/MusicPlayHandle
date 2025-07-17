@@ -1198,14 +1198,23 @@ void AddSongDialogController::processFiles() {
             try {
                 // 1. 首先保存歌曲到数据库
                 SongDao songDao;
-                Song song;
-                song.setFilePath(fileInfo.filePath);
-                song.setTitle(fileInfo.title.isEmpty() ? QFileInfo(fileInfo.filePath).baseName() : fileInfo.title);
-                song.setArtist(fileInfo.artist.isEmpty() ? "未知艺术家" : fileInfo.artist);
-                song.setAlbum(fileInfo.album.isEmpty() ? "未知专辑" : fileInfo.album);
-                song.setDuration(fileInfo.duration);
-                song.setFileSize(fileInfo.fileSize);
-                song.setFileFormat(fileInfo.format);
+                
+                // 使用Song::fromFile()方法正确提取元数据
+                Song song = Song::fromFile(fileInfo.filePath);
+                
+                // 如果FileInfo中有自定义的元数据，则覆盖默认值
+                if (!fileInfo.title.isEmpty()) {
+                    song.setTitle(fileInfo.title);
+                }
+                if (!fileInfo.artist.isEmpty()) {
+                    song.setArtist(fileInfo.artist);
+                }
+                if (!fileInfo.album.isEmpty()) {
+                    song.setAlbum(fileInfo.album);
+                }
+                if (fileInfo.duration > 0) {
+                    song.setDuration(fileInfo.duration);
+                }
                 
                 int songId = songDao.addSong(song);
                 if (songId > 0) {

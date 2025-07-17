@@ -48,6 +48,7 @@ set(SOURCES
     
     # 音频模块
     src/audio/audioengine.cpp
+    src/threading/audioworkerthread.cpp
     
     # 核心模块
     src/core/appconfig.cpp

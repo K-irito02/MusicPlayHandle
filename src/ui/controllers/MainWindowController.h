@@ -198,6 +198,7 @@ public:
 public slots:
     // 主窗口事件
     void onMainWindowShow();
+    void onSongDeletionCompleted(int successCount, int failureCount);
     void onMainWindowClose();
     void onMainWindowResize();
     void onMainWindowMove();

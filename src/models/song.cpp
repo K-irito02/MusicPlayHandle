@@ -152,12 +152,7 @@ bool Song::isValid() const
 
 QString Song::displayName() const
 {
-    if (!m_title.isEmpty()) {
-        if (!m_artist.isEmpty()) {
-            return QString("%1 - %2").arg(m_artist, m_title);
-        }
-        return m_title;
-    }
+    // 直接返回文件名，不显示艺术家和标题信息
     return m_fileName;
 }
 

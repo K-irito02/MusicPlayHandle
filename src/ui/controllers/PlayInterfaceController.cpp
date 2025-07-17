@@ -940,7 +940,7 @@ void PlayInterfaceController::onLevelDataAvailable(float left, float right)
 void PlayInterfaceController::onPlayPauseClicked()
 {
     logInfo("播放/暂停按钮点击");
-    emit playRequested();
+    emit playRequested(getCurrentSong());
 }
 
 void PlayInterfaceController::onPlayModeClicked()

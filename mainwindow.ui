@@ -306,20 +306,6 @@ QStatusBar {
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="pushButton_shuffle">
-                <property name="text">
-                 <string>列表循环</string>
-                </property>
-                <property name="icon">
-                 <iconset resource="icon.qrc">
-                  <normaloff>:/new/prefix1/images/listCycle.png</normaloff>:/new/prefix1/images/listCycle.png</iconset>
-                </property>
-                <property name="toolTip">
-                 <string>切换播放模式：列表循环/单曲循环/随机播放</string>
-                </property>
-               </widget>
-              </item>
-              <item>
                <widget class="QPushButton" name="pushButton_repeat">
                 <property name="text">
                  <string>全选</string>
@@ -480,7 +466,7 @@ QStatusBar {
              <item>
               <widget class="QPushButton" name="pushButton_previous">
                <property name="text">
-                <string/>
+                <string></string>
                </property>
                <property name="icon">
                 <iconset resource="icon.qrc">
@@ -500,7 +486,7 @@ QStatusBar {
              <item>
               <widget class="QPushButton" name="pushButton_play_pause">
                <property name="text">
-                <string/>
+                <string></string>
                </property>
                <property name="icon">
                 <iconset resource="icon.qrc">
@@ -520,7 +506,7 @@ QStatusBar {
              <item>
               <widget class="QPushButton" name="pushButton_play_mode">
                <property name="text">
-                <string/>
+                <string></string>
                </property>
                <property name="icon">
                 <iconset resource="icon.qrc">
@@ -540,7 +526,7 @@ QStatusBar {
              <item>
               <widget class="QPushButton" name="pushButton_next">
                <property name="text">
-                <string/>
+                <string></string>
                </property>
                <property name="icon">
                 <iconset resource="icon.qrc">

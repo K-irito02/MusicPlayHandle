@@ -301,6 +301,9 @@ Song SongDao::createSongFromQuery(const QSqlQuery& query)
     song.setPlayCount(query.value("play_count").toInt());
     song.setRating(query.value("rating").toInt());
     
+    // 确保歌曲可用性设置正确
+    song.setIsAvailable(true);
+    
     // 解析标签字符串
     QString tagsStr = query.value("tags").toString();
     if (!tagsStr.isEmpty()) {

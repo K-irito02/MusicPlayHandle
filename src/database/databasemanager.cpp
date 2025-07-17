@@ -314,30 +314,48 @@ bool DatabaseManager::insertInitialData()
         return false;
     }
     
-    // 检查并创建必需的系统标签
-    const QStringList systemTags = {
-        "('我的歌曲', '#4CAF50', '所有歌曲的默认标签', 1)",
-        "('最近播放', '#2196F3', '最近播放的歌曲', 1)",
-        "('我的收藏', '#FF9800', '收藏的歌曲', 1)"
+    // 系统标签数据结构
+    struct SystemTag {
+        QString name;
+        QString color;
+        QString description;
     };
     
-    for (const QString& tagData : systemTags) {
-        // 提取标签名称进行检查
-        QString tagName = tagData.split("'")[1];
+    // 定义系统标签
+    const QVector<SystemTag> systemTags = {
+        {"我的歌曲", "#4CAF50", "所有歌曲的默认标签"},
+        {"最近播放", "#2196F3", "最近播放的歌曲"},
+        {"我的收藏", "#FF9800", "收藏的歌曲"}
+    };
+    
+    for (const SystemTag& tag : systemTags) {
+        // 使用参数化查询检查标签是否存在
+        QSqlQuery checkQuery(database());
+        checkQuery.prepare("SELECT COUNT(*) FROM tags WHERE name = ?");
+        checkQuery.addBindValue(tag.name);
         
-        // 检查标签是否已存在
-        QSqlQuery checkQuery = executeQuery(QString("SELECT COUNT(*) FROM tags WHERE name = '%1'").arg(tagName));
+        if (!checkQuery.exec()) {
+            logError(QString("检查系统标签失败: %1 - %2").arg(tag.name, checkQuery.lastError().text()));
+            return false;
+        }
+        
         if (checkQuery.next() && checkQuery.value(0).toInt() > 0) {
-            qDebug() << "系统标签已存在，跳过:" << tagName;
+            qDebug() << "系统标签已存在，跳过:" << tag.name;
             continue;
         }
         
-        QString insertSQL = "INSERT INTO tags (name, color, description, is_system) VALUES " + tagData;
-        if (!executeUpdate(insertSQL)) {
-            logError("插入系统标签失败: " + tagData);
+        // 使用参数化查询插入标签
+        QSqlQuery insertQuery(database());
+        insertQuery.prepare("INSERT INTO tags (name, color, description, is_system) VALUES (?, ?, ?, 1)");
+        insertQuery.addBindValue(tag.name);
+        insertQuery.addBindValue(tag.color);
+        insertQuery.addBindValue(tag.description);
+        
+        if (!insertQuery.exec()) {
+            logError(QString("插入系统标签失败: %1 - %2").arg(tag.name, insertQuery.lastError().text()));
             return false;
         }
-        qDebug() << "插入系统标签成功:" << tagName;
+        qDebug() << "插入系统标签成功:" << tag.name;
     }
     
     qDebug() << "初始数据插入完成";
@@ -351,16 +369,32 @@ bool DatabaseManager::cleanupExtraTags()
     // 定义需要保留的系统标签
     const QStringList requiredSystemTags = {"我的歌曲", "最近播放", "我的收藏"};
     
-    // 构建删除SQL，删除不在必需列表中的所有标签
-    QString deleteSQL = "DELETE FROM tags WHERE name NOT IN ('我的歌曲', '最近播放', '我的收藏')";
+    // 使用参数化查询删除不在必需列表中的标签
+    QSqlQuery deleteQuery(database());
+    QString placeholders = QString("?").repeated(requiredSystemTags.size()).split("", Qt::SkipEmptyParts).join(",");
+    QString deleteSQL = QString("DELETE FROM tags WHERE name NOT IN (%1)").arg(placeholders);
     
-    if (!executeUpdate(deleteSQL)) {
-        logError("清理多余标签失败");
+    deleteQuery.prepare(deleteSQL);
+    for (const QString& tagName : requiredSystemTags) {
+        deleteQuery.addBindValue(tagName);
+    }
+    
+    if (!deleteQuery.exec()) {
+        logError(QString("清理多余标签失败: %1").arg(deleteQuery.lastError().text()));
         return false;
     }
     
+    // 获取删除的标签数量
+    int deletedCount = deleteQuery.numRowsAffected();
+    qDebug() << "已删除标签数量:" << deletedCount;
+    
     // 查询剩余标签数量
-    QSqlQuery countQuery = executeQuery("SELECT COUNT(*) FROM tags");
+    QSqlQuery countQuery(database());
+    if (!countQuery.exec("SELECT COUNT(*) FROM tags")) {
+        logError(QString("查询剩余标签数量失败: %1").arg(countQuery.lastError().text()));
+        return false;
+    }
+    
     if (countQuery.next()) {
         int remainingCount = countQuery.value(0).toInt();
         qDebug() << "清理完成，剩余标签数量:" << remainingCount;
@@ -377,9 +411,17 @@ bool DatabaseManager::checkAndFixSystemTags()
     const QStringList requiredSystemTags = {"我的歌曲", "最近播放", "我的收藏"};
     
     for (const QString& tagName : requiredSystemTags) {
-        QSqlQuery checkQuery = executeQuery(QString("SELECT COUNT(*) FROM tags WHERE name = '%1' AND is_system = 1").arg(tagName));
+        // 使用参数化查询检查标签是否存在
+        QSqlQuery checkQuery(database());
+        checkQuery.prepare("SELECT COUNT(*) FROM tags WHERE name = ? AND is_system = 1");
+        checkQuery.addBindValue(tagName);
         
-        if (!checkQuery.isValid() || !checkQuery.next() || checkQuery.value(0).toInt() == 0) {
+        if (!checkQuery.exec()) {
+            logError(QString("检查系统标签失败: %1 - %2").arg(tagName, checkQuery.lastError().text()));
+            return false;
+        }
+        
+        if (!checkQuery.next() || checkQuery.value(0).toInt() == 0) {
             qDebug() << "系统标签缺失，正在添加:" << tagName;
             
             // 根据标签名称设置颜色和描述
@@ -395,15 +437,21 @@ bool DatabaseManager::checkAndFixSystemTags()
                 description = "收藏的歌曲";
             }
             
-            QString insertSQL = QString("INSERT INTO tags (name, color, description, is_system) VALUES ('%1', '%2', '%3', 1)")
-                               .arg(tagName, color, description);
+            // 使用参数化查询插入标签
+            QSqlQuery insertQuery(database());
+            insertQuery.prepare("INSERT INTO tags (name, color, description, is_system) VALUES (?, ?, ?, 1)");
+            insertQuery.addBindValue(tagName);
+            insertQuery.addBindValue(color);
+            insertQuery.addBindValue(description);
             
-            if (!executeUpdate(insertSQL)) {
-                logError("添加系统标签失败: " + tagName);
+            if (!insertQuery.exec()) {
+                logError(QString("添加系统标签失败: %1 - %2").arg(tagName, insertQuery.lastError().text()));
                 return false;
             }
             
             qDebug() << "系统标签添加成功:" << tagName;
+        } else {
+            qDebug() << "系统标签已存在:" << tagName;
         }
     }
     
