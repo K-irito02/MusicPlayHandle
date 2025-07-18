@@ -9,21 +9,21 @@
 - **组织**: Qt6音频播放器开发团队
 - **域名**: musicPlayHandle.qt6.org
 - **描述**: Modern Qt6 Music Player with Advanced Tag Management
-- **构建系统**: CMake (兼容) / qmake (主要)  # 优先使用 qmake 构建系统
-- **Qt版本**: Qt6.5.3+ (MinGW 64-bit)  # 依赖 Qt6.5.3 及以上版本
-- **语言标准**: C++17  # 采用 C++17 标准，支持现代C++特性
-- **开发环境**: Qt Creator  # 使用 Qt Creator 进行开发
+- **构建系统**: qmake (主要) / CMake (兼容)
+- **Qt版本**: Qt6.5.3+ (MinGW 64-bit)
+- **语言标准**: C++17
+- **开发环境**: Qt Creator
 
 ### 🏗️ **项目架构**
 
 本项目采用分层架构设计，包含以下核心组件：
 
-#### 1. **应用程序管理层**  <!-- 管理应用生命周期、配置、国际化等 -->
+#### 1. **应用程序管理层**
 - **`ApplicationManager`** - 应用程序生命周期管理
 - **`ComponentIntegration`** - 组件集成管理器
 - **`ServiceContainer`** - 依赖注入容器
 
-#### 2. **UI控制层**  <!-- 负责界面事件、用户交互、UI逻辑分发 -->
+#### 2. **UI控制层**
 - **控制器模块**
   - `MainWindowController` - 主窗口控制器
   - `AddSongDialogController` - 添加歌曲对话框控制器
@@ -36,10 +36,11 @@
   - `PlayInterface` - 音乐播放界面
   - `SettingsDialog` - 应用程序设置对话框
 - **自定义控件**
+  - `MusicProgressBar` - 自定义音乐进度条（包含PreciseSlider）
   - `TagListItem` - 标签列表项控件
   - `TagListItemFactory` - 标签列表项工厂
 
-#### 3. **业务逻辑层**  <!-- 负责音频播放、标签等核心业务 -->
+#### 3. **业务逻辑层**
 - **音频引擎**
   - `AudioEngine` - 音频播放引擎 (支持多格式、播放控制、音效处理)
 - **管理器模块**
@@ -49,11 +50,11 @@
   - `ITagManager` - 标签管理器接口
   - `IDatabaseManager` - 数据库管理器接口
 
-#### 4. **线程管理层**  <!-- 负责多线程任务调度与数据同步 -->
+#### 4. **线程管理层**
 - **`MainThreadManager`** - 主线程管理器
 - **`AudioWorkerThread`** - 音频工作线程
 
-#### 5. **数据层**  <!-- 负责数据持久化、数据库访问、数据模型 -->
+#### 5. **数据层**
 - **数据库管理**
   - `DatabaseManager` - 数据库连接和事务管理
   - `BaseDao` - DAO基类，提供通用数据访问功能
@@ -70,7 +71,7 @@
   - `ErrorLog` - 错误日志模型
   - `SystemLog` - 系统日志模型
 
-#### 6. **支持组件**  <!-- 日志、配置等通用基础设施 -->
+#### 6. **支持组件**
 - **日志系统**
   - `Logger` - 基础日志系统
   - `StructuredLogger` - 结构化日志系统 (JSON格式、异步处理)
@@ -92,16 +93,19 @@
 MusicPlayHandle/
 ├── .clang-format             # 代码格式化配置
 ├── .gitignore               # Git忽略文件配置
-├── CMakeLists.txt           # CMake构建配置 (主要)
-├── musicPlayHandle.pro      # qmake项目文件 (兼容)
+├── musicPlayHandle.pro      # qmake项目文件 (主要)
+├── CMakeLists.txt           # CMake构建配置 (兼容)
 ├── README.md                # 项目说明文档
 ├── version.h                # 版本信息定义
 ├── main.cpp                 # 程序入口
 ├── mainwindow.h/cpp         # 主窗口实现
 ├── docs/                    # 项目文档
-│   ├── GITHUB_UPLOAD_GUIDE.md      # GitHub上传指南
-│   ├── OPTIMIZATION_GUIDE.md        # 详细优化指南
-│   └── PROJECT_OPTIMIZATION_SUMMARY.md  # 项目优化总结
+│   ├── 拖拽与点击进度条-最终解决及优化方案.md  # 进度条优化方案
+│   ├── 播放与暂停不可控问题.md              # 播放控制问题解决
+│   ├── PROJECT_OPTIMIZATION_SUMMARY.md      # 项目优化总结
+│   ├── OPTIMIZATION_GUIDE.md                # 详细优化指南
+│   ├── GITHUB_UPLOAD_GUIDE.md              # GitHub上传指南
+│   └── 其他技术文档...
 ├── examples/                # 示例代码
 │   └── optimization_usage_example.cpp  # 优化使用示例
 ├── images/                  # UI图标资源
@@ -126,7 +130,6 @@ MusicPlayHandle/
 │   ├── reverseIcon.png      # 倒退图标
 │   ├── shufflePlay.png      # 随机播放图标
 │   ├── singleCycle.png      # 单曲循环图标
-│   ├── stopIcon.png         # 停止图标
 │   └── undoIcon.png         # 撤销图标
 ├── src/                     # 源码主目录
 │   ├── audio/               # 音频引擎模块
@@ -182,11 +185,14 @@ MusicPlayHandle/
 │       │   ├── PlayInterface.h/cpp
 │       │   └── SettingsDialog.h/cpp
 │       └── widgets/         # 自定义控件
+│           ├── musicprogressbar.h/cpp  # 音乐进度条
 │           ├── taglistitem.h/cpp
 │           └── taglistitemfactory.h/cpp
 ├── tests/                   # 测试代码
 │   ├── test_tagmanager.h/cpp  # 标签管理完整测试套件
 │   ├── test_tag_fix.cpp     # 标签修复测试
+│   ├── test_play_pause.cpp  # 播放暂停测试
+│   ├── test_progress_bar_fix.cpp # 进度条修复测试
 │   └── debug_test.cpp       # 调试测试
 ├── translations/            # 国际化文件
 │   └── en_US.ts            # 英文翻译
@@ -219,22 +225,23 @@ MusicPlayHandle/
     │   ├── 添加歌曲界面.png
     │   └── 管理标签界面.png
     └── 设计模式选择/        # 设计模式应用文档
-    ├── 设计模式0.1.md
-    └── 设计模式0.2.md
+        ├── 设计模式0.1.md
+        └── 设计模式0.2.md
 ```
-
 
 ### 🚀 **功能特性**
 
-1. **音频播放系统**  <!-- 完整的音频播放引擎实现 -->
+1. **音频播放系统**
    - ✅ 支持多种音频格式 (MP3, WAV, FLAC, OGG等)
    - ✅ 完整播放控制 (播放/暂停/停止/跳转/音量)
    - ✅ 多种播放模式 (列表循环/单曲循环/随机播放)
    - ✅ 播放列表管理和播放历史
    - ✅ 线程安全的音频处理
    - ✅ 实时播放状态监控
+   - ✅ 自定义音乐进度条 (PreciseSlider)
+   - ✅ 精确的拖拽和点击控制
 
-2. **标签管理系统**  <!-- 完整的标签管理功能 -->
+2. **标签管理系统**
    - ✅ 标签CRUD操作 (创建、读取、更新、删除)
    - ✅ 歌曲-标签关联管理
    - ✅ 系统标签和用户标签分离
@@ -243,154 +250,275 @@ MusicPlayHandle/
    - ✅ 批量操作支持
    - ✅ 完整的单元测试覆盖
 
-3. **播放列表管理**  <!-- 播放列表和收藏功能 -->
+3. **播放列表管理**
    - ✅ 播放列表创建和管理
    - ✅ 播放历史记录
    - ✅ 收藏夹功能
    - ✅ 播放列表验证和权限控制
    - ✅ 最近播放列表
 
-4. **多线程架构**    <!-- 音频与UI分离，保证流畅体验 -->
+4. **多线程架构**
    - ✅ 音频处理独立线程 (`AudioWorkerThread`)
    - ✅ UI线程管理 (`MainThreadManager`)
    - ✅ 线程安全的数据访问
    - ✅ 异步操作和信号槽通信
 
-5. **数据持久化**    <!-- SQLite数据库，数据安全可靠 -->
+5. **数据持久化**
    - ✅ SQLite数据库存储
    - ✅ 完整的DAO层设计
    - ✅ 数据库事务管理
    - ✅ 歌曲、标签、播放列表数据管理
    - ✅ 错误日志和系统日志
 
-6. **性能优化**      <!-- 先进的性能优化技术 -->
+6. **性能优化**
    - ✅ LRU缓存系统 (`Cache`)
    - ✅ 对象池管理 (`ObjectPool`)
    - ✅ 延迟加载机制 (`LazyLoader`)
    - ✅ 结构化日志系统 (JSON格式、异步处理)
    - ✅ 内存管理优化
 
-7. **架构设计**      <!-- 现代化架构模式 -->
+7. **架构设计**
    - ✅ 依赖注入容器 (`ServiceContainer`)
    - ✅ 接口抽象层设计
    - ✅ 组件化架构
    - ✅ 统一错误处理 (`Result<T>`)
    - ✅ 配置管理系统
 
-8. **用户界面**      <!-- 完整的UI框架 -->
+8. **用户界面**
    - ✅ MVC架构的UI控制器
    - ✅ 多个功能对话框
-   - ✅ 自定义控件 (标签列表项)
+   - ✅ 自定义控件 (标签列表项、音乐进度条)
    - ✅ Qt Designer UI文件
-   - 🚧 响应式界面设计 (开发中)
+   - ✅ 精确的进度条控制
 
 ### 🔧 **构建和运行**
 
 #### 环境要求
-- **Qt 6.5.3+**: 推荐使用 Qt 6.5.3 或更高版本
-- **编译器**: MinGW 64-bit (Windows) / GCC 9+ (Linux) / Clang 10+ (macOS)
-- **C++17**: 项目基于 C++17 标准，需要编译器支持
-- **CMake 3.16+**: 主要构建系统 (推荐)
-- **qmake**: 兼容构建系统
+- **Qt环境**:
+  - Qt 6.5.3+ (推荐使用Qt 6.5.3 MinGW 64-bit)
+  - Qt Creator 11.0.0+
+  - Qt多媒体模块和SQL模块
+- **编译器**:
+  - MinGW 64-bit (Windows)
+  - MSVC 2019+ (Windows)
+  - GCC 9.0+ (Linux)
+  - Clang 10+ (macOS)
+- **构建工具**:
+  - qmake （推荐）
+  - CMake 3.16+ (兼容)
+  - Qt Creator 16.0.2
 
 #### 构建步骤
 
-**使用 CMake (推荐):**
+1. **获取源码**
 ```bash
-# 创建构建目录
+# 克隆仓库
+git clone https://github.com/K-irito02/musicPlayHandle.git
+cd musicPlayHandle
+
+# 更新子模块（如果有）
+git submodule update --init --recursive
+```
+
+2. **使用Qt Creator构建**
+- 启动Qt Creator
+- 打开项目文件 `musicPlayHandle.pro` (推荐) 或 `CMakeLists.txt`
+- 选择构建套件：
+  - Windows: MinGW 64-bit 或 MSVC 2019+
+  - Linux: GCC 9.0+
+  - macOS: Clang 10+
+- 配置构建模式（Debug/Release）
+- 点击构建按钮或按Ctrl+B
+
+3. **命令行构建**
+
+**使用 qmake (推荐):**
+```bash
+# Windows (MinGW)
+qmake
+mingw32-make -j4
+
+# Windows (MSVC)
+qmake
+nmake
+
+# Linux/macOS
+qmake
+make -j4
+```
+
+**使用 CMake:**
+```bash
+# 创建并进入构建目录
 mkdir build && cd build
 
 # 配置项目
 cmake ..
 
 # 编译项目
-cmake --build .
+cmake --build . --config Release
 
 # 运行程序
 .\MusicPlayHandle.exe  # Windows
 ./MusicPlayHandle      # Linux/macOS
 ```
 
-**使用 qmake:**
-```bash
-# 生成 Makefile
-qmake musicPlayHandle.pro
+#### 依赖检查
+- 确保Qt多媒体模块已安装
+- 检查系统音频驱动
+- 验证SQLite支持
+- 确认编解码器支持（MP3/WAV/FLAC/OGG）
 
-# 编译项目
-mingw32-make  # Windows (MinGW)
-make          # Linux/macOS
-nmake         # Windows (MSVC)
-```
-
-**使用 Qt Creator:**
-1. 打开 `CMakeLists.txt` 或 `musicPlayHandle.pro`
-2. 配置构建套件 (Qt 6.5.3 + MinGW 64-bit)
-3. 点击构建按钮或按 `Ctrl+B`
+#### 常见问题
+- 如果遇到找不到Qt库的错误，检查环境变量设置
+- 编解码器缺失问题，安装相应的Qt多媒体编解码器
+- 数据库连接错误，检查SQLite驱动
+- 音频播放问题，验证系统音频设置
 
 ### 🎯 **技术亮点**
 
 #### 🏗️ 架构设计
-- **现代Qt6特性**: 充分利用Qt6的新功能和性能改进
-- **C++17标准**: 使用现代C++17特性 (智能指针、auto、lambda等)
-- **分层架构**: 清晰的UI控制层、业务逻辑层、数据层分离
-- **组件化设计**: 松耦合、高内聚的模块化架构
-- **依赖注入**: `ServiceContainer` 实现完整的IoC容器
-- **接口抽象**: `ITagManager`、`IDatabaseManager` 等接口设计
+- **现代Qt6特性**: 
+  - 充分利用Qt6的新功能和性能改进
+  - 基于Qt6.5.3+的最新特性
+  - 现代化UI组件和控件
+- **C++17标准**: 
+  - 智能指针自动内存管理
+  - Lambda表达式和函数式编程
+  - 模板元编程优化
+- **分层架构**: 
+  - UI控制层、业务逻辑层、数据层分离
+  - MVC模式的控制器设计
+  - 插件化架构支持
+- **组件化设计**: 
+  - 松耦合、高内聚的模块化架构
+  - 可复用的自定义控件
+  - 标准化的组件接口
 
 #### 🚀 性能优化
-- **LRU缓存系统**: 智能缓存管理，提升数据访问性能
-- **对象池管理**: 减少内存分配开销，提升性能
-- **延迟加载**: 按需加载资源，优化启动时间
-- **线程安全**: QMutex、QMutexLocker保证多线程安全
-- **异步处理**: 音频处理与UI分离，保证界面流畅
+- **缓存系统**: 
+  - LRU算法的智能缓存
+  - 音频数据预加载机制
+  - 标签系统缓存优化
+- **内存管理**: 
+  - 对象池复用技术
+  - 智能指针资源管理
+  - 内存泄漏检测
+- **多线程优化**: 
+  - 音频处理独立线程
+  - UI响应优先级保证
+  - 线程安全的数据访问
 
 #### 🛠️ 开发工具
-- **统一错误处理**: `Result<T>` 模板实现类型安全的错误处理
-- **结构化日志**: JSON格式日志，支持异步写入和分级管理
-- **单元测试**: 完整的测试框架，包含Mock对象和测试覆盖
-- **代码质量**: clang-format 自动格式化，保证代码风格一致
-- **文档完整**: 详细的设计文档和优化指南
+- **错误处理**: 
+  - Result<T>模板错误处理
+  - 异常捕获和恢复机制
+  - 错误追踪和日志
+- **日志系统**: 
+  - 结构化JSON格式
+  - 异步写入优化
+  - 多级别日志分类
+- **测试框架**: 
+  - 完整单元测试覆盖
+  - Mock对象和依赖注入
+  - 自动化测试流程
 
 #### 🎵 音频技术
-- **多格式支持**: 支持主流音频格式 (MP3, WAV, FLAC, OGG)
-- **播放模式**: 列表循环、单曲循环、随机播放 (三种模式)
-- **实时监控**: 播放状态、进度、音量的实时反馈
-- **线程安全**: 音频引擎的线程安全设计
+- **格式支持**: 
+  - 多格式解码(MP3/WAV/FLAC/OGG)
+  - 音频格式转换
+  - 元数据解析和编辑
+- **播放控制**: 
+  - 精确时间定位
+  - 实时音量调节
+  - 播放状态监控
+- **高级特性**: 
+  - 智能播放列表
+  - 自定义进度条控制
+  - 拖拽预览功能
 
 ### 📋 **开发状态**
 
 #### ✅ 已完成功能 (核心架构)
 - [x] **项目架构**: 完整的分层架构和组件化设计
 - [x] **数据库系统**: SQLite集成、DAO层、事务管理
-- [x] **标签管理**: 完整的CRUD操作、系统标签、用户标签
-- [x] **播放列表**: 基础播放列表管理功能
-- [x] **音频引擎**: 基础播放控制、多格式支持、三种播放模式(列表循环/单曲循环/随机播放)
-- [x] **依赖注入**: ServiceContainer IoC容器
-- [x] **性能优化**: LRU缓存、对象池、延迟加载
-- [x] **错误处理**: Result<T>模板、统一错误管理
-- [x] **日志系统**: 结构化日志、异步写入、多级别
-- [x] **单元测试**: TagManager完整测试覆盖、标签修复测试、调试测试
-- [x] **UI控制器**: MVC架构的控制器层(MainWindowController、AddSongDialogController、ManageTagDialogController、PlayInterfaceController)
-- [x] **UI对话框**: 完整的对话框实现(AddSongDialog、CreateTagDialog、ManageTagDialog、PlayInterface、SettingsDialog)
-- [x] **自定义控件**: 标签列表项控件(TagListItem)和工厂(TagListItemFactory)
-- [x] **UI资源**: 完整的图标资源集合，包含播放模式图标(listCycle.png、singleCycle.png、shufflePlay.png)
+- [x] **标签管理**: 完整的CRUD操作、系统标签、用户标签、标签配置和字符串管理、标签统计和搜索功能、批量操作支持
+- [x] **播放列表**: 播放列表创建和管理、播放历史记录、收藏夹功能、播放列表验证和权限控制、最近播放列表
+- [x] **音频引擎**: 多格式支持(MP3/WAV/FLAC/OGG)、完整播放控制(播放/暂停/停止/跳转/音量)、三种播放模式(列表循环/单曲循环/随机播放)、线程安全的音频处理、实时播放状态监控
+- [x] **依赖注入**: ServiceContainer IoC容器、组件化架构、接口抽象层设计
+- [x] **性能优化**: LRU缓存系统、对象池管理、延迟加载机制、结构化日志系统(JSON格式、异步处理)、内存管理优化
+- [x] **错误处理**: Result<T>模板、统一错误管理、异常捕获和处理
+- [x] **日志系统**: 基础日志系统、结构化日志(JSON格式)、异步写入、多级别日志、错误日志和系统日志
+- [x] **单元测试**: TagManager完整测试覆盖、标签修复测试、调试测试、Mock对象和依赖隔离
+- [x] **UI控制器**: MVC架构的控制器层(MainWindowController、AddSongDialogController、ManageTagDialogController、PlayInterfaceController)、事件处理和状态管理
+- [x] **UI对话框**: 完整的对话框实现(AddSongDialog、CreateTagDialog、ManageTagDialog、PlayInterface、SettingsDialog)、用户交互优化
+- [x] **自定义控件**: 标签列表项控件(TagListItem)和工厂(TagListItemFactory)、音乐进度条(MusicProgressBar)和精确滑块(PreciseSlider)
+- [x] **UI资源**: 完整的图标资源集合，包含播放模式图标和控制按钮图标
 
 #### 🚧 开发中功能 (UI完善)
-- [ ] **主窗口界面**: 播放控制界面优化
-- [ ] **标签管理界面**: 标签编辑、歌曲关联界面完善
-- [ ] **播放列表界面**: 列表显示、拖拽排序
-- [ ] **设置界面**: 应用配置、主题设置
-- [ ] **响应式设计**: 自适应布局、多分辨率支持
+- [ ] **UI美化**: 
+  - [x] 基础界面布局优化
+  - [x] 播放控制界面美化
+  - [ ] 主题系统设计和实现
+  - [ ] 自定义样式表支持
+- [ ] **播放控制**: 
+  - [x] 进度条拖动实现
+  - [x] 音量控制功能
+  - [ ] 播放速度控制
+  - [ ] 均衡器支持
+- [ ] **播放列表**: 
+  - [x] 基础播放列表管理
+  - [ ] 拖拽排序功能
+  - [ ] 多选操作支持
+  - [ ] 智能播放列表
+- [ ] **标签管理**: 
+  - [x] 基础标签CRUD
+  - [ ] 标签拖拽功能
+  - [ ] 标签颜色定制
+  - [ ] 标签层级关系
+- [ ] **设置界面**: 
+  - [x] 基础设置选项
+  - [ ] 音频输出设置
+  - [ ] 快捷键配置
+  - [ ] 主题设置
+- [ ] **快捷键**: 
+  - [x] 基础媒体控制快捷键
+  - [ ] 全局快捷键支持
+  - [ ] 自定义快捷键
 
-#### 📝 计划功能 (高级特性)
-- [ ] **音频可视化**: 频谱分析、波形显示
-- [ ] **音频效果**: 均衡器、音效处理
-- [ ] **歌词显示**: LRC歌词解析、同步显示
-- [ ] **快捷键**: 全局快捷键、自定义绑定
-- [ ] **主题系统**: 多主题支持、自定义主题
-- [ ] **插件架构**: 可扩展插件系统
-- [ ] **网络功能**: 在线音乐、云同步
-- [ ] **国际化**: 多语言支持、本地化
+#### 📅 计划功能 (高级特性)
+- [ ] **音频分析**: 
+  - [ ] 实时频谱显示
+  - [ ] 波形图绘制
+  - [ ] 音频特征分析
+- [ ] **歌词支持**: 
+  - [ ] LRC歌词解析
+  - [ ] 歌词编辑器
+  - [ ] 歌词时间轴调整
+- [ ] **插件系统**: 
+  - [ ] 插件架构设计
+  - [ ] 热插拔支持
+  - [ ] 插件市场
+- [ ] **网络功能**: 
+  - [ ] 在线音乐库集成
+  - [ ] 歌单同步功能
+  - [ ] 音乐元数据获取
+- [ ] **智能推荐**: 
+  - [ ] 基于标签的音乐推荐
+  - [ ] 播放历史分析
+  - [ ] 个性化推荐算法
+- [ ] **多语言**: 
+  - [ ] 国际化框架集成
+  - [ ] 多语言资源管理
+  - [ ] 动态语言切换
+- [ ] **云同步**: 
+  - [ ] 用户数据云存储
+  - [ ] 设置同步
+  - [ ] 播放列表云备份
+- [ ] **移动端**: 
+  - [ ] 移动应用架构设计
+  - [ ] 跨平台适配
+  - [ ] 移动端特性支持
 
 ### 🤝 **贡献指南**
 
@@ -445,9 +573,11 @@ nmake         # Windows (MSVC)
 
 #### 🔧 开发文档
 - **[docs/](docs/)** - 技术文档目录
-  - `GITHUB_UPLOAD_GUIDE.md` - GitHub上传指南
-  - `OPTIMIZATION_GUIDE.md` - 详细优化指南
+  - `拖拽与点击进度条-最终解决及优化方案.md` - 进度条优化方案
+  - `播放与暂停不可控问题.md` - 播放控制问题解决
   - `PROJECT_OPTIMIZATION_SUMMARY.md` - 项目优化总结
+  - `OPTIMIZATION_GUIDE.md` - 详细优化指南
+  - `GITHUB_UPLOAD_GUIDE.md` - GitHub上传指南
 
 #### 📝 学习资料
 - **[笔记/](笔记/)** - 开发笔记和学习记录
@@ -456,8 +586,8 @@ nmake         # Windows (MSVC)
   - `optimization_usage_example.cpp` - 优化使用示例
 - **[tests/](tests/)** - 单元测试和测试文档
   - `test_tagmanager.h/cpp` - 标签管理完整测试套件
-  - `test_addsong_dialog.cpp` - 添加歌曲对话框测试
-  - `test_compile_fix.cpp` - 编译修复测试
+  - `test_play_pause.cpp` - 播放暂停测试
+  - `test_progress_bar_fix.cpp` - 进度条修复测试
 
 #### 🎨 资源文件
 - **[images/](images/)** - 项目图标和界面截图
@@ -470,9 +600,9 @@ nmake         # Windows (MSVC)
 
 ### 📞 **联系方式**
 
-- **项目仓库**: [GitHub - MusicPlayHandle](https://github.com/your-username/musicPlayHandle)
-- **问题反馈**: [Issues](https://github.com/your-username/musicPlayHandle/issues)
-- **功能建议**: [Discussions](https://github.com/your-username/musicPlayHandle/discussions)
+- **项目仓库**: [GitHub - MusicPlayHandle](https://github.com/K-irito02/musicPlayHandle)
+- **问题反馈**: [Issues](https://github.com/K-irito02/musicPlayHandle/issues)
+- **功能建议**: [Discussions](https://github.com/K-irito02/musicPlayHandle/discussions)
 - **技术文档**: 查看 `docs/` 目录下的详细文档
 
 ### 🙏 **致谢**

@@ -554,70 +554,19 @@ QStatusBar {
             <property name="frameShadow">
              <enum>QFrame::Plain</enum>
             </property>
-            <layout class="QVBoxLayout" name="verticalLayout_progress">
-             <item>
-              <widget class="QSlider" name="slider_progress">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="tickPosition">
-                <enum>QSlider::NoTicks</enum>
-               </property>
-               <property name="toolTip">
-                <string>播放进度</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QFrame" name="frame_time">
-               <property name="frameShape">
-                <enum>QFrame::NoFrame</enum>
-               </property>
-               <property name="frameShadow">
-                <enum>QFrame::Plain</enum>
-               </property>
-               <layout class="QHBoxLayout" name="horizontalLayout_time">
-                <item>
-                 <widget class="QLabel" name="label_current_time">
-                  <property name="text">
-                   <string>00:00</string>
-                  </property>
-                  <property name="font">
-                   <font>
-                    <pointsize>9</pointsize>
-                   </font>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <spacer name="horizontalSpacer_time">
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>40</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_total_time">
-                  <property name="text">
-                   <string>00:00</string>
-                  </property>
-                  <property name="font">
-                   <font>
-                    <pointsize>9</pointsize>
-                   </font>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-            </layout>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>60</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>80</height>
+             </size>
+            </property>
+            <!-- 自定义MusicProgressBar组件将在此处动态添加 -->
            </widget>
           </item>
           <item>
@@ -663,6 +612,36 @@ QStatusBar {
                </property>
                <property name="toolTip">
                 <string>音量控制</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_volume_value">
+               <property name="text">
+                <string>50%</string>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>9</pointsize>
+                </font>
+               </property>
+               <property name="styleSheet">
+                <string>QLabel { color: #666; }</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>30</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>40</width>
+                 <height>16777215</height>
+                </size>
                </property>
               </widget>
              </item>

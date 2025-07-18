@@ -10,6 +10,7 @@
 #include <QtMath>
 #include <QRegularExpression>
 #include <QFile> // Added for QFile::exists
+#include <QMediaDevices> // Added for QMediaDevices
 
 // 静态成员初始化
 AudioEngine* AudioEngine::m_instance = nullptr;
@@ -24,11 +25,12 @@ AudioEngine::AudioEngine(QObject* parent)
     m_currentVolume(50.0),
     m_audioOutput(nullptr),
     m_audioWorker(nullptr),
-    m_state(AudioTypes::AudioState::Stopped),
+    m_state(AudioTypes::AudioState::Paused), // 初始状态设为暂停而不是停止
     m_position(0),
     m_duration(0),
-    m_volume(70),
+    m_volume(70), // 确保初始音量不为0
     m_muted(false),
+    m_userPaused(false), // 初始化用户暂停标志
     m_currentIndex(-1),
     m_playMode(AudioTypes::PlayMode::Loop),
     m_equalizerEnabled(false),
@@ -47,6 +49,41 @@ AudioEngine::AudioEngine(QObject* parent)
     qDebug() << "[AudioEngine] Audio worker thread started";
     
     initializeAudio();
+    
+    // 确保音量设置正确
+    if (m_audioOutput) {
+        m_audioOutput->setVolume(0.7); // 设置70%音量
+        m_audioOutput->setMuted(false);
+        qDebug() << "[AudioEngine] 构造函数中设置音量:" << m_audioOutput->volume() << " 静音:" << m_audioOutput->isMuted();
+        
+        // 验证音频输出设备
+        QAudioDevice device = m_audioOutput->device();
+        if (!device.description().isEmpty()) {
+            qDebug() << "[音频引擎] 音频输出设备:" << device.description();
+        } else {
+            qWarning() << "[音频引擎] 警告：音频输出设备无效";
+            
+            // 尝试设置默认音频设备
+            QMediaDevices mediaDevices;
+            QList<QAudioDevice> audioOutputs = mediaDevices.audioOutputs();
+            if (!audioOutputs.isEmpty()) {
+                QAudioDevice defaultDevice = audioOutputs.first();
+                qDebug() << "[音频引擎] 尝试设置默认音频设备:" << defaultDevice.description();
+                m_audioOutput->setDevice(defaultDevice);
+                
+                device = m_audioOutput->device();
+                if (!device.description().isEmpty()) {
+                    qDebug() << "[音频引擎] 默认音频设备设置成功:" << device.description();
+                } else {
+                    qWarning() << "[音频引擎] 默认音频设备设置失败";
+                }
+            } else {
+                qWarning() << "[音频引擎] 没有可用的音频输出设备";
+            }
+        }
+    } else {
+        qWarning() << "[AudioEngine] 警告：音频输出未初始化";
+    }
     
     LOG_INFO("AudioEngine", "音频引擎初始化完成");
 }
@@ -102,10 +139,40 @@ void AudioEngine::initializeAudio()
         m_player->setAudioOutput(m_audioOutput);
         qDebug() << "[音频引擎] 音频输出已设置到媒体播放器";
         
-        // 初始化音量
-        m_audioOutput->setVolume(m_volume / 100.0);
-        m_audioOutput->setMuted(m_muted);
-        qDebug() << "[音频引擎] 音频输出参数已配置 音量:" << (m_volume / 100.0) << " 静音:" << m_muted;
+        // 初始化音量 - 确保音量不为0
+        if (m_volume <= 0) {
+            m_volume = 70; // 设置默认音量
+        }
+        float volumeFloat = m_volume / 100.0;
+        m_audioOutput->setVolume(volumeFloat);
+        m_audioOutput->setMuted(false); // 确保不是静音状态
+        qDebug() << "[音频引擎] 音频输出参数已配置 音量:" << volumeFloat << " 静音:" << m_muted;
+        
+        // 验证音频输出设备
+        QAudioDevice device = m_audioOutput->device();
+        if (!device.description().isEmpty()) {
+            qDebug() << "[音频引擎] 音频输出设备:" << device.description();
+        } else {
+            qWarning() << "[音频引擎] 警告：音频输出设备无效";
+            
+            // 尝试设置默认音频设备
+            QMediaDevices mediaDevices;
+            QList<QAudioDevice> audioOutputs = mediaDevices.audioOutputs();
+            if (!audioOutputs.isEmpty()) {
+                QAudioDevice defaultDevice = audioOutputs.first();
+                qDebug() << "[音频引擎] 尝试设置默认音频设备:" << defaultDevice.description();
+                m_audioOutput->setDevice(defaultDevice);
+                
+                device = m_audioOutput->device();
+                if (!device.description().isEmpty()) {
+                    qDebug() << "[音频引擎] 默认音频设备设置成功:" << device.description();
+                } else {
+                    qWarning() << "[音频引擎] 默认音频设备设置失败";
+                }
+            } else {
+                qWarning() << "[音频引擎] 没有可用的音频输出设备";
+            }
+        }
         
         qDebug() << "[音频引擎] 媒体播放器信号将在connectSignals中统一连接";
         
@@ -207,120 +274,159 @@ void AudioEngine::disconnectSignals()
 
 void AudioEngine::play()
 {
-    qDebug() << "[排查] AudioEngine::play() 被调用";
-    qDebug() << "[排查] 当前播放列表大小:" << m_playlist.size();
-    qDebug() << "[排查] 当前索引:" << m_currentIndex;
-    
-    // 预检查（不加锁）
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
-        qWarning() << "[排查] 当前索引越界，无法播放";
-        return;
-    }
+    qDebug() << "[AudioEngine::play] 开始执行播放方法";
     
     if (!m_player) {
-        logError("播放器未初始化");
         qDebug() << "[AudioEngine::play] 错误：播放器未初始化";
+        logError("播放器未初始化");
         return;
     }
     
-    const Song& song = m_playlist.at(m_currentIndex);
-    qDebug() << "[排查] AudioEngine::play() Song.isValid():" << song.isValid();
-    qDebug() << "[排查] AudioEngine::play() Song.filePath():" << song.filePath();
-    qDebug() << "[排查] AudioEngine::play() 文件是否存在:" << QFile::exists(song.filePath());
-    
-    qDebug() << "[AudioEngine::play] 开始执行播放方法";
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
+        qDebug() << "[AudioEngine::play] 错误：播放列表为空或索引无效";
+        logError("播放列表为空或索引无效");
+        return;
+    }
     
     try {
         QMutexLocker locker(&m_mutex);
-        // 如果是暂停或停止状态，直接恢复播放
-        if (m_state == AudioTypes::AudioState::Paused || m_state == AudioTypes::AudioState::Stopped) {
-            qDebug() << "[AudioEngine::play] 恢复暂停/停止的播放";
+        
+        QMediaPlayer::PlaybackState playerState = m_player->playbackState();
+        qDebug() << "[AudioEngine::play] 当前QMediaPlayer状态:" << playerState;
+        
+        // 如果已暂停，恢复播放
+        if (playerState == QMediaPlayer::PausedState) {
+            qDebug() << "[AudioEngine::play] 检测到暂停状态，恢复播放";
             m_player->play();
             m_state = AudioTypes::AudioState::Playing;
+            m_userPaused = false;
             emit stateChanged(m_state);
-            if (m_positionTimer) m_positionTimer->start();
-            logPlaybackEvent("恢复播放", currentSong().title());
+            
+            if (m_positionTimer) {
+                m_positionTimer->start();
+            }
+            qDebug() << "[AudioEngine::play] 恢复播放完成";
             return;
         }
-    }
-    catch (const std::exception& e) {
+        
+        // 如果正在播放，确保状态同步
+        if (playerState == QMediaPlayer::PlayingState) {
+            qDebug() << "[AudioEngine::play] 检测到播放状态，确保状态同步";
+            if (m_state != AudioTypes::AudioState::Playing) {
+                m_state = AudioTypes::AudioState::Playing;
+                m_userPaused = false;
+                emit stateChanged(m_state);
+            }
+            return;
+        }
+        
+        // 如果处于停止状态或其他状态，需要重新加载媒体
+        if (playerState == QMediaPlayer::StoppedState || 
+            playerState == QMediaPlayer::StoppedState) {
+            qDebug() << "[AudioEngine::play] 检测到停止状态，需要重新加载媒体";
+            locker.unlock();
+            
+            // 播放新歌曲
+            const Song& song = m_playlist.at(m_currentIndex);
+            qDebug() << "[AudioEngine::play] 开始播放新歌曲:" << song.title();
+            
+            // 设置音频输出
+            if (m_player->audioOutput() != m_audioOutput) {
+                m_player->setAudioOutput(m_audioOutput);
+            }
+            
+            if (m_audioOutput) {
+                m_audioOutput->setVolume(m_volume / 100.0);
+                m_audioOutput->setMuted(false);
+            }
+            
+            // 加载并播放
+            m_state = AudioTypes::AudioState::Loading;
+            emit stateChanged(AudioTypes::AudioState::Loading);
+            
+            loadMedia(song.filePath());
+            
+            // 修复：在loadMedia后调用play()开始播放
+            m_player->play();
+            m_state = AudioTypes::AudioState::Playing;
+            m_userPaused = false;
+            emit stateChanged(m_state);
+            
+            if (m_positionTimer) {
+                m_positionTimer->start();
+            }
+            
+            logPlaybackEvent("开始播放", song.title());
+            updateCurrentSong();
+            addToHistory(song);
+            qDebug() << "[AudioEngine::play] 新歌曲播放已启动";
+            return;
+        }
+        
+        // 其他状态的处理
+        qDebug() << "[AudioEngine::play] 其他状态，尝试播放";
+        m_player->play();
+        m_state = AudioTypes::AudioState::Playing;
+        m_userPaused = false;
+        emit stateChanged(m_state);
+        
+        if (m_positionTimer) {
+            m_positionTimer->start();
+        }
+        
+    } catch (const std::exception& e) {
         QString errorMsg = QString("播放失败: %1").arg(e.what());
+        qDebug() << "[AudioEngine::play] 播放失败:" << errorMsg;
         logError(errorMsg);
-        qDebug() << "[AudioEngine::play] 捕获到异常:" << e.what();
         QMutexLocker locker(&m_mutex);
         m_state = AudioTypes::AudioState::Error;
         emit stateChanged(AudioTypes::AudioState::Error);
         emit errorOccurred(errorMsg);
-        return;
     }
-    // 处理新歌曲播放（不持有锁，避免界面卡顿）
-    const Song& song2 = m_playlist[m_currentIndex];
-    qDebug() << "[AudioEngine::play] 开始播放新歌曲: " << song2.title() << " - " << song2.artist();
-    qDebug() << "[AudioEngine::play] 文件路径: " << song2.filePath();
-    if (m_player->audioOutput() != m_audioOutput) {
-        qDebug() << "[AudioEngine::play] 重新设置音频输出";
-        m_player->setAudioOutput(m_audioOutput);
-    }
-    {
-        QMutexLocker locker(&m_mutex);
-        m_state = AudioTypes::AudioState::Loading;
-    }
-    emit stateChanged(AudioTypes::AudioState::Loading);
-    qDebug() << "[媒体加载] 开始加载媒体文件";
-    loadMedia(song2.filePath());
-    qDebug() << "[媒体加载] 媒体加载函数调用完成";
-    QMediaPlayer::MediaStatus mediaStatus = m_player->mediaStatus();
-    qDebug() << "[媒体加载] 当前媒体状态:" << mediaStatus;
-    if (mediaStatus == QMediaPlayer::LoadedMedia) {
-        qDebug() << "[媒体加载] 媒体已加载，开始播放";
-        QMutexLocker locker(&m_mutex);
-        m_state = AudioTypes::AudioState::Playing;
-        emit stateChanged(AudioTypes::AudioState::Playing);
-        m_player->play();
-    } else {
-        qDebug() << "[媒体加载] 媒体正在加载中，等待加载完成";
-    }
-    logPlaybackEvent("开始播放", song2.title());
-    updateCurrentSong();
-    addToHistory(song2);
-    if (m_positionTimer) {
-        m_positionTimer->start();
-        qDebug() << "[AudioEngine::play] 位置更新定时器已启动";
-    }
-    qDebug() << "[AudioEngine::play] 播放方法执行完成，当前播放状态:" << m_player->playbackState();
 }
 
 void AudioEngine::pause()
 {
-    QMutexLocker locker(&m_mutex);
-    
     qDebug() << "[AudioEngine::pause] 开始执行暂停方法";
     
-    // 检查播放器是否初始化
     if (!m_player) {
-        logError("播放器未初始化");
         qDebug() << "[AudioEngine::pause] 错误：播放器未初始化";
+        logError("播放器未初始化");
         return;
     }
     
     try {
-        // 直接暂停播放
-        m_player->pause();
-        m_state = AudioTypes::AudioState::Paused;
-        emit stateChanged(m_state);
+        QMutexLocker locker(&m_mutex);
         
-        // 停止位置更新定时器
-        if (m_positionTimer) {
-            m_positionTimer->stop();
+        QMediaPlayer::PlaybackState playerState = m_player->playbackState();
+        qDebug() << "[AudioEngine::pause] 当前QMediaPlayer状态:" << playerState;
+        
+        // 改进的暂停逻辑：只要不是已暂停状态，都可以尝试暂停
+        if (playerState != QMediaPlayer::PausedState) {
+            qDebug() << "[AudioEngine::pause] 调用m_player->pause()";
+            m_player->pause();
+            
+            qDebug() << "[AudioEngine::pause] 更新状态为暂停";
+            m_state = AudioTypes::AudioState::Paused;
+            m_userPaused = true;
+            
+            qDebug() << "[AudioEngine::pause] 发送状态变化信号";
+            emit stateChanged(m_state);
+            
+            if (m_positionTimer) {
+                m_positionTimer->stop();
+                qDebug() << "[AudioEngine::pause] 位置更新定时器已停止";
+            }
+            
+            logPlaybackEvent("暂停播放", currentSong().title());
+            qDebug() << "[AudioEngine::pause] 暂停操作完成";
+        } else {
+            qDebug() << "[AudioEngine::pause] 当前已经是暂停状态，无需重复暂停";
         }
         
-        // 记录暂停事件
-        logPlaybackEvent("暂停播放", currentSong().title());
-        
-        qDebug() << "[AudioEngine::pause] 已直接调用QMediaPlayer::pause()";
     } catch (const std::exception& e) {
+        qDebug() << "[AudioEngine::pause] 暂停失败:" << e.what();
         logError(QString("暂停失败: %1").arg(e.what()));
-        qDebug() << "[AudioEngine::pause] 捕获到异常:" << e.what();
     }
 }
 
@@ -340,7 +446,7 @@ void AudioEngine::stop()
     try {
         // 停止播放
         m_audioWorker->stopAudio();
-        m_state = AudioTypes::AudioState::Stopped;
+        m_state = AudioTypes::AudioState::Paused; // 改为暂停状态而不是停止状态
         emit stateChanged(m_state);
         
         // 停止位置更新定时器
@@ -368,18 +474,37 @@ void AudioEngine::stop()
 
 void AudioEngine::seek(qint64 position)
 {
+    qDebug() << "[AudioEngine::seek] 开始执行跳转，位置:" << position << "ms";
     QMutexLocker locker(&m_mutex);
     
-    if (!m_audioWorker) return;
+    if (!m_player) {
+        qDebug() << "[AudioEngine::seek] 错误：QMediaPlayer为空，无法执行跳转";
+        return;
+    }
     
     try {
-        m_audioWorker->seekAudio(position);
-        m_position = position;
+        // 检查播放器状态
+        QMediaPlayer::PlaybackState playerState = m_player->playbackState();
+        qDebug() << "[AudioEngine::seek] 当前播放器状态:" << playerState;
+        
+        // 如果播放器处于停止状态，需要先加载媒体
+        if (playerState == QMediaPlayer::StoppedState) {
+            qDebug() << "[AudioEngine::seek] 播放器处于停止状态，无法跳转";
+            logError("播放器处于停止状态，无法跳转");
+            return;
+        }
+        
+        qDebug() << "[AudioEngine::seek] 直接使用主线程QMediaPlayer执行跳转";
+        m_player->setPosition(position);
+        
+        // 注意：不立即更新m_position和发送positionChanged信号
+        // 让QMediaPlayer::positionChanged信号来处理位置更新
+        // 这样可以避免异步操作导致的位置不一致问题
         
         logPlaybackEvent("跳转位置", QString("位置: %1ms").arg(position));
-        emit positionChanged(position);
-        qDebug() << "[AudioEngine::seek] 已委托工作线程设置位置为:" << position;
+        qDebug() << "[AudioEngine::seek] 跳转请求已发送，等待QMediaPlayer位置更新";
     } catch (const std::exception& e) {
+        qDebug() << "[AudioEngine::seek] 跳转失败，异常:" << e.what();
         logError(QString("跳转失败: %1").arg(e.what()));
     }
 }
@@ -393,18 +518,29 @@ void AudioEngine::setVolume(int volume)
 {
     QMutexLocker locker(&m_mutex);
     
-    if (!m_audioOutput) return;
+    if (!m_audioOutput) {
+        qDebug() << "[AudioEngine::setVolume] 错误：音频输出未初始化";
+        return;
+    }
     
     volume = qBound(0, volume, 100);
     
     try {
-        m_audioWorker->setVolume(volume);
+        // 直接设置音频输出音量
+        float volumeFloat = volume / 100.0;
+        m_audioOutput->setVolume(volumeFloat);
         m_volume = volume;
         
+        qDebug() << "[AudioEngine::setVolume] 设置音量为:" << volume << " (" << volumeFloat << ")";
         logPlaybackEvent("音量调节", QString("音量: %1%").arg(volume));
         emit volumeChanged(volume);
-        qDebug() << "[AudioEngine::setVolume] 已委托工作线程设置音量为:" << volume;
+        
+        // 同时通过工作线程设置（如果需要）
+        if (m_audioWorker) {
+            m_audioWorker->setVolume(volume);
+        }
     } catch (const std::exception& e) {
+        qDebug() << "[AudioEngine::setVolume] 设置音量失败:" << e.what();
         logError(QString("音量调节失败: %1").arg(e.what()));
     }
 }
@@ -424,6 +560,25 @@ void AudioEngine::setMuted(bool muted)
     } catch (const std::exception& e) {
         logError(QString("静音设置失败: %1").arg(e.what()));
     }
+}
+
+void AudioEngine::toggleMute()
+{
+    qDebug() << "[AudioEngine::toggleMute] 切换静音状态";
+    
+    if (!m_audioOutput) {
+        qDebug() << "[AudioEngine::toggleMute] 错误：音频输出未初始化";
+        return;
+    }
+    
+    QMutexLocker locker(&m_mutex);
+    bool newMutedState = !m_muted;
+    m_muted = newMutedState;
+    m_audioOutput->setMuted(newMutedState);
+    
+    qDebug() << "[AudioEngine::toggleMute] 静音状态已切换为:" << newMutedState;
+    logPlaybackEvent("静音切换", newMutedState ? "静音" : "取消静音");
+    emit mutedChanged(newMutedState);
 }
 
 int AudioEngine::volume() const
@@ -520,10 +675,14 @@ void AudioEngine::setCurrentIndex(int index)
         bool wasPlaying = (m_state == AudioTypes::AudioState::Playing);
         qDebug() << "[AudioEngine::setCurrentIndex] 当前播放状态:" << (wasPlaying ? "播放中" : "已停止");
         
-        // 如果正在播放，先停止
+        // 如果正在播放，先停止当前播放
         if (wasPlaying) {
             qDebug() << "[AudioEngine::setCurrentIndex] 停止当前播放以切换歌曲";
-            stop();
+            if (m_player) {
+                m_player->stop();
+            }
+            m_state = AudioTypes::AudioState::Paused;
+            emit stateChanged(m_state);
         }
         
         // 保存旧索引用于日志
@@ -546,9 +705,8 @@ void AudioEngine::setCurrentIndex(int index)
         emit currentIndexChanged(index);
         emit currentSongChanged(currentSong);
         
-        // 总是自动播放新歌曲
-        qDebug() << "[AudioEngine::setCurrentIndex] 自动播放新选择的歌曲";
-        play();
+        // 不再自动播放新歌曲，让播放由用户主动触发
+        qDebug() << "[AudioEngine::setCurrentIndex] 索引设置完成，等待用户播放";
     } catch (const std::exception& e) {
         QString errorMsg = QString("设置当前索引时发生异常: %1").arg(e.what());
         qDebug() << "[AudioEngine::setCurrentIndex] " << errorMsg;
@@ -585,6 +743,18 @@ void AudioEngine::playNext()
             setCurrentIndex(nextIndex);
             qDebug() << "[AudioEngine::playNext] 成功切换到下一首歌曲:" 
                      << (m_currentIndex < m_playlist.size() ? m_playlist[m_currentIndex].title() : "未知");
+            
+            // 自动播放新选择的歌曲 - 强制播放
+            qDebug() << "[AudioEngine::playNext] 自动播放新选择的歌曲";
+            
+            // 确保状态为Loading，然后调用play()
+            m_state = AudioTypes::AudioState::Loading;
+            emit stateChanged(AudioTypes::AudioState::Loading);
+            
+            // 延迟一点调用play，确保setCurrentIndex的信号处理完成
+            QTimer::singleShot(50, this, [this]() {
+                play();
+            });
         } else {
             qDebug() << "[AudioEngine::playNext] 无效的下一首索引:" << nextIndex;
         }
@@ -622,6 +792,18 @@ void AudioEngine::playPrevious()
             setCurrentIndex(previousIndex);
             qDebug() << "[AudioEngine::playPrevious] 成功切换到上一首歌曲:" 
                      << (m_currentIndex < m_playlist.size() ? m_playlist[m_currentIndex].title() : "未知");
+            
+            // 自动播放新选择的歌曲 - 强制播放
+            qDebug() << "[AudioEngine::playPrevious] 自动播放新选择的歌曲";
+            
+            // 确保状态为Loading，然后调用play()
+            m_state = AudioTypes::AudioState::Loading;
+            emit stateChanged(AudioTypes::AudioState::Loading);
+            
+            // 延迟一点调用play，确保setCurrentIndex的信号处理完成
+            QTimer::singleShot(50, this, [this]() {
+                play();
+            });
         } else {
             qDebug() << "[AudioEngine::playPrevious] 无效的上一首索引:" << previousIndex;
         }
@@ -836,20 +1018,7 @@ void AudioEngine::onDurationChanged(qint64 duration)
     emit durationChanged(duration);
 }
 
-void AudioEngine::onStateChanged(QMediaPlayer::PlaybackState state)
-{
-    QMutexLocker locker(&m_mutex);
-    
-    AudioTypes::AudioState newState = convertMediaState(state);
-    if (m_state != newState) {
-        m_state = newState;
-        emit stateChanged(newState);
-        
-        if (newState == AudioTypes::AudioState::Stopped) {
-            handlePlaybackFinished();
-        }
-    }
-}
+// 删除未使用的onStateChanged方法，使用handlePlaybackStateChanged替代
 
 void AudioEngine::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
 {
@@ -858,48 +1027,74 @@ void AudioEngine::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
     if (status == QMediaPlayer::LoadedMedia) {
         logPlaybackEvent("媒体加载完成", currentSong().title());
         
-        // 使用锁保护状态检查和修改
-        {
-            QMutexLocker locker(&m_mutex);
-            // 如果当前状态是Loading，说明是在等待媒体加载完成后播放
-            if (m_state == AudioTypes::AudioState::Loading) {
-                qDebug() << "[媒体状态] 媒体加载完成，开始播放";
-                m_state = AudioTypes::AudioState::Playing;
-            } else {
-                qDebug() << "[媒体状态] 媒体加载完成，但当前状态不是Loading:" << static_cast<int>(m_state);
-                return; // 不是Loading状态，不需要自动播放
+        QMutexLocker locker(&m_mutex);
+        if (m_state == AudioTypes::AudioState::Loading && !m_userPaused) {
+            // 确保音频输出设置正确
+            if (m_audioOutput) {
+                m_audioOutput->setVolume(m_volume / 100.0);
+                m_audioOutput->setMuted(false);
+            }
+            
+            m_state = AudioTypes::AudioState::Playing;
+            emit stateChanged(AudioTypes::AudioState::Playing);
+            
+            m_player->play();
+            
+            if (m_positionTimer) {
+                m_positionTimer->start();
             }
         }
-        
-        emit stateChanged(AudioTypes::AudioState::Playing);
-        m_player->play();
         
     } else if (status == QMediaPlayer::EndOfMedia) {
         logPlaybackEvent("播放完成", currentSong().title());
         handlePlaybackFinished();
+    } else if (status == QMediaPlayer::InvalidMedia) {
+        logError("无效的媒体文件");
+        QMutexLocker locker(&m_mutex);
+        m_state = AudioTypes::AudioState::Error;
+        emit stateChanged(AudioTypes::AudioState::Error);
     }
 }
 
 void AudioEngine::handlePlaybackStateChanged(QMediaPlayer::PlaybackState state)
 {
-    qDebug() << "[播放状态] QMediaPlayer状态变化:" << state;
+    qDebug() << "[AudioEngine::handlePlaybackStateChanged] QMediaPlayer状态变化:" << state;
     
-    // 转换并更新AudioEngine状态
+    QMutexLocker locker(&m_mutex);
+    
     AudioTypes::AudioState newState = convertMediaState(state);
+    
+    // 只有当状态真正发生变化时才发送信号
     if (m_state != newState) {
+        qDebug() << "[AudioEngine::handlePlaybackStateChanged] 状态从" << static_cast<int>(m_state) 
+                 << "变为" << static_cast<int>(newState);
+        
         m_state = newState;
-        qDebug() << "[播放状态] AudioEngine状态更新为:" << static_cast<int>(newState);
-        emit stateChanged(newState);
+        
+        // 根据状态更新用户暂停标志
+        if (state == QMediaPlayer::PlayingState) {
+            m_userPaused = false;
+        } else if (state == QMediaPlayer::PausedState) {
+            m_userPaused = true;
+        }
+        
+        // 更新定时器状态
+        if (m_positionTimer) {
+            if (state == QMediaPlayer::PlayingState) {
+                if (!m_positionTimer->isActive()) {
+                    m_positionTimer->start();
+                }
+            } else {
+                if (m_positionTimer->isActive()) {
+                    m_positionTimer->stop();
+                }
+            }
+        }
+        
+        emit stateChanged(m_state);
     }
     
-    // 发出原始播放状态信号
     emit playbackStateChanged(static_cast<int>(state));
-    
-    // 处理播放完成
-    if (state == QMediaPlayer::StoppedState && m_player && m_player->mediaStatus() == QMediaPlayer::EndOfMedia) {
-        qDebug() << "[播放状态] 检测到播放完成，调用handlePlaybackFinished";
-        handlePlaybackFinished();
-    }
 }
 
 void AudioEngine::onErrorOccurred(QMediaPlayer::Error error)
@@ -1313,15 +1508,127 @@ QString AudioEngine::getFileExtension(const QString& filePath) const
 
 AudioTypes::AudioState AudioEngine::convertMediaState(QMediaPlayer::PlaybackState state) const
 {
+    qDebug() << "[状态转换] QMediaPlayer状态:" << state << " -> AudioEngine状态:";
+    
+    AudioTypes::AudioState result;
     switch (state) {
         case QMediaPlayer::StoppedState:
-            return AudioTypes::AudioState::Stopped;
+            result = AudioTypes::AudioState::Paused; // 将停止状态映射为暂停状态
+            qDebug() << "[状态转换] StoppedState -> Paused";
+            break;
         case QMediaPlayer::PlayingState:
-            return AudioTypes::AudioState::Playing;
+            result = AudioTypes::AudioState::Playing;
+            qDebug() << "[状态转换] PlayingState -> Playing";
+            break;
         case QMediaPlayer::PausedState:
-            return AudioTypes::AudioState::Paused;
+            result = AudioTypes::AudioState::Paused;
+            qDebug() << "[状态转换] PausedState -> Paused";
+            break;
         default:
-            return AudioTypes::AudioState::Stopped;
+            result = AudioTypes::AudioState::Paused; // 默认也映射为暂停状态
+            qDebug() << "[状态转换] UnknownState -> Paused";
+            break;
+    }
+    
+    return result;
+}
+
+// 测试音频系统是否正常工作
+void AudioEngine::testAudioSystem()
+{
+    qDebug() << "[AudioEngine::testAudioSystem] 开始音频系统测试";
+    
+    if (!m_player) {
+        qDebug() << "[AudioEngine::testAudioSystem] 错误：播放器未初始化";
+        return;
+    }
+    
+    if (!m_audioOutput) {
+        qDebug() << "[AudioEngine::testAudioSystem] 错误：音频输出未初始化";
+        return;
+    }
+    
+    // 测试音频输出设备
+    QAudioDevice device = m_audioOutput->device();
+    qDebug() << "[AudioEngine::testAudioSystem] 音频输出设备:" << device.description();
+    qDebug() << "[AudioEngine::testAudioSystem] 音频输出音量:" << m_audioOutput->volume();
+    qDebug() << "[AudioEngine::testAudioSystem] 音频输出静音状态:" << m_audioOutput->isMuted();
+    
+    // 测试播放器状态
+    QMediaPlayer::PlaybackState playerState = m_player->playbackState();
+    qDebug() << "[AudioEngine::testAudioSystem] QMediaPlayer状态:" << playerState;
+    qDebug() << "[AudioEngine::testAudioSystem] AudioEngine状态:" << static_cast<int>(m_state);
+    qDebug() << "[AudioEngine::testAudioSystem] 用户暂停标志:" << m_userPaused;
+    
+    // 测试播放列表
+    qDebug() << "[AudioEngine::testAudioSystem] 播放列表大小:" << m_playlist.size();
+    qDebug() << "[AudioEngine::testAudioSystem] 当前索引:" << m_currentIndex;
+    
+    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+        const Song& song = m_playlist[m_currentIndex];
+        qDebug() << "[AudioEngine::testAudioSystem] 当前歌曲:" << song.title();
+        qDebug() << "[AudioEngine::testAudioSystem] 歌曲文件路径:" << song.filePath();
+        
+        // 检查文件是否存在
+        QFileInfo fileInfo(song.filePath());
+        qDebug() << "[AudioEngine::testAudioSystem] 文件是否存在:" << fileInfo.exists();
+        qDebug() << "[AudioEngine::testAudioSystem] 文件大小:" << fileInfo.size();
+    }
+    
+    qDebug() << "[AudioEngine::testAudioSystem] 音频系统测试完成";
+}
+
+void AudioEngine::debugAudioState() const
+{
+    qDebug() << "=== AudioEngine 状态调试信息 ===";
+    qDebug() << "AudioEngine状态:" << getStateString();
+    qDebug() << "用户暂停标志:" << m_userPaused;
+    qDebug() << "播放列表大小:" << m_playlist.size();
+    qDebug() << "当前索引:" << m_currentIndex;
+    
+    if (m_player) {
+        QMediaPlayer::PlaybackState playerState = m_player->playbackState();
+        qDebug() << "QMediaPlayer状态:" << playerState;
+        qDebug() << "媒体状态:" << m_player->mediaStatus();
+        qDebug() << "错误状态:" << m_player->error();
+    } else {
+        qDebug() << "QMediaPlayer: 未初始化";
+    }
+    
+    if (m_audioOutput) {
+        qDebug() << "音频输出音量:" << m_audioOutput->volume();
+        qDebug() << "音频输出静音:" << m_audioOutput->isMuted();
+        QAudioDevice device = m_audioOutput->device();
+        qDebug() << "音频输出设备:" << device.description();
+    } else {
+        qDebug() << "音频输出: 未初始化";
+    }
+    
+    if (m_positionTimer) {
+        qDebug() << "位置定时器活跃:" << m_positionTimer->isActive();
+        qDebug() << "位置定时器间隔:" << m_positionTimer->interval();
+    } else {
+        qDebug() << "位置定时器: 未初始化";
+    }
+    
+    qDebug() << "=== 调试信息结束 ===";
+}
+
+QString AudioEngine::getStateString() const
+{
+    switch (m_state) {
+        case AudioTypes::AudioState::Playing:
+            return "Playing";
+        case AudioTypes::AudioState::Paused:
+            return "Paused";
+        case AudioTypes::AudioState::Stopped:
+            return "Stopped";
+        case AudioTypes::AudioState::Loading:
+            return "Loading";
+        case AudioTypes::AudioState::Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 

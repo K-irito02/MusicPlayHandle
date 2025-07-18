@@ -20,6 +20,7 @@
 #include "playinterfacecontroller.h"
 #include "managetagdialogcontroller.h"
 #include "../widgets/taglistitem.h"
+#include "../widgets/musicprogressbar.h"
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMessageBox>
@@ -45,9 +46,17 @@
 #include <QFormLayout>
 #include <QSpinBox>
 #include <QMap>
+#include <QInputDialog>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QToolTip>
 
 MainWindowController::MainWindowController(MainWindow* mainWindow, QObject* parent)
     : QObject(parent)
+    , m_isVolumeSliderPressed(false)
+    , m_lastVolumeBeforeMute(50)
+    , m_volumeLabel(nullptr)
+    , m_volumeIconLabel(nullptr)
     , m_mainWindow(mainWindow)
     , m_audioEngine(nullptr)
     , m_tagManager(nullptr)
@@ -65,7 +74,7 @@ MainWindowController::MainWindowController(MainWindow* mainWindow, QObject* pare
     , m_songFrame(nullptr)
     , m_playbackFrame(nullptr)
     , m_currentSongLabel(nullptr)
-    , m_progressSlider(nullptr)
+    , m_musicProgressBar(nullptr)
     , m_volumeSlider(nullptr)
     , m_playButton(nullptr)
     , m_pauseButton(nullptr)
@@ -248,6 +257,11 @@ void MainWindowController::onTagListItemClicked(QListWidgetItem* item)
 {
     if (item) {
         logInfo(QString("标签被点击: %1").arg(item->text()));
+        
+        // 清除之前选中的歌曲信息，因为切换了标签
+        m_selectedSong = Song();
+        logDebug("标签切换，清除选中歌曲信息");
+        
         // 根据选中的标签更新歌曲列表
         updateSongList();
         updateStatusBar(QString("选择标签: %1").arg(item->text()));
@@ -260,6 +274,17 @@ void MainWindowController::onSongListItemClicked(QListWidgetItem* item)
     if (item) {
         logInfo(QString("歌曲被点击: %1").arg(item->text()));
         updateStatusBar(QString("选择歌曲: %1").arg(item->text()));
+        
+        // 更新选中的歌曲信息
+        QVariant songData = item->data(Qt::UserRole);
+        if (songData.isValid()) {
+            Song song = songData.value<Song>();
+            if (song.isValid()) {
+                m_selectedSong = song;
+                logDebug(QString("更新选中歌曲: ID=%1, 标题=%2, 路径=%3")
+                        .arg(song.id()).arg(song.title()).arg(song.filePath()));
+            }
+        }
     }
 }
 
@@ -277,6 +302,13 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
         logWarning("音频引擎未初始化，无法播放歌曲");
         return;
     }
+    
+    // 记录当前播放状态（用于调试）
+    AudioTypes::AudioState currentState = m_audioEngine->state();
+    bool hasCurrentSong = !m_audioEngine->playlist().isEmpty();
+    qDebug() << "[双击播放] 当前音频状态:" << static_cast<int>(currentState);
+    qDebug() << "[双击播放] 当前播放列表是否为空:" << !hasCurrentSong;
+    qDebug() << "[双击播放] 不管当前状态如何，直接播放双击的歌曲";
     
     // 获取歌曲对象
     QVariant songData = item->data(Qt::UserRole);
@@ -313,6 +345,10 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
         return;
     }
     
+    // 更新选中的歌曲信息
+    m_selectedSong = song;
+    logDebug(QString("双击更新选中歌曲: ID=%1, 标题=%2").arg(song.id()).arg(song.title()));
+    
     // 调用音频引擎播放歌曲
      try {
          if (!m_songListWidget) {
@@ -325,6 +361,8 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
          int targetIndex = -1;
          int songCount = m_songListWidget->count();
          
+         qDebug() << "[双击播放] 构建播放列表，当前歌曲列表数量:" << songCount;
+         
          for (int i = 0; i < songCount; ++i) {
              QListWidgetItem* listItem = m_songListWidget->item(i);
              if (listItem) {
@@ -336,6 +374,7 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
                          // 找到当前点击的歌曲在播放列表中的索引
                          if (listSong.id() == song.id()) {
                              targetIndex = playlist.size() - 1;
+                             qDebug() << "[双击播放] 找到目标歌曲，索引:" << targetIndex;
                          }
                      }
                  }
@@ -354,24 +393,24 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
              return;
          }
          
-         qDebug() << "构建播放列表完成，共" << playlist.size() << "首歌曲，目标索引:" << targetIndex;
+         qDebug() << "[双击播放] 构建播放列表完成，共" << playlist.size() << "首歌曲，目标索引:" << targetIndex;
          
          // 设置播放列表到AudioEngine
          m_audioEngine->setPlaylist(playlist);
-         qDebug() << "已设置播放列表到AudioEngine";
+         qDebug() << "[双击播放] 已设置播放列表到AudioEngine，播放列表大小:" << m_audioEngine->playlist().size();
          
          // 设置当前歌曲索引
          m_audioEngine->setCurrentIndex(targetIndex);
-         qDebug() << "已设置当前歌曲索引为" << targetIndex;
+         qDebug() << "[双击播放] 已设置当前歌曲索引为" << targetIndex << "，当前索引:" << m_audioEngine->currentIndex();
          
          // 开始播放
          m_audioEngine->play();
-         qDebug() << "已调用播放方法";
+         qDebug() << "[双击播放] 已调用播放方法";
          
          logInfo(QString("开始播放歌曲: %1 - %2").arg(song.artist()).arg(song.title()));
          updateStatusBar(QString("正在播放: %1").arg(item->text()), 3000);
          
-         qDebug() << "歌曲播放请求已发送";
+         qDebug() << "[双击播放] 歌曲播放请求已发送";
          
      } catch (const std::exception& e) {
          qDebug() << "播放歌曲时发生异常:" << e.what();
@@ -383,91 +422,283 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
 // 播放控制事件
 void MainWindowController::onPlayButtonClicked()
 {
-    qDebug() << "[播放控制] 播放/暂停按钮被点击";
+    qDebug() << "[播放按钮] 播放/暂停按钮被点击";
+    qDebug() << "[播放按钮] m_audioEngine指针:" << m_audioEngine;
+    
     if (!m_audioEngine) {
-        qWarning() << "AudioEngine未初始化";
-        updateStatusBar("音频引擎未就绪", 2000);
-        return;
-    }
-    
-    // 如果当前正在播放，则暂停
-    if (m_audioEngine->state() == AudioTypes::AudioState::Playing) {
-        qDebug() << "[播放控制] 当前为播放状态，切换为暂停";
-        m_audioEngine->pause();
-        return;
-    }
-    
-    // 如果当前已暂停，则恢复播放
-    if (m_audioEngine->state() == AudioTypes::AudioState::Paused) {
-        qDebug() << "[播放控制] 当前为暂停状态，恢复播放";
-        m_audioEngine->play();
-        return;
-    }
-    
-    // 检查是否有选中的歌曲
-    QListWidgetItem* selectedItem = nullptr;
-    if (m_songListWidget) {
-        selectedItem = m_songListWidget->currentItem();
-    }
-    
-    // 如果有选中的歌曲，播放该歌曲
-    if (selectedItem) {
-        qDebug() << "[播放控制] 播放选中的歌曲: " << selectedItem->text();
-        onSongListItemDoubleClicked(selectedItem);
-        return;
-    }
-    
-    // 如果没有选中的歌曲，播放当前标签下的第一首歌曲
-    if (m_songListWidget && m_songListWidget->count() > 0) {
-        qDebug() << "[播放控制] 没有选中歌曲，播放当前标签下的第一首歌曲";
-        QListWidgetItem* firstItem = m_songListWidget->item(0);
-        if (firstItem) {
-            m_songListWidget->setCurrentItem(firstItem);
-            onSongListItemDoubleClicked(firstItem);
+        qDebug() << "[播放按钮] AudioEngine未初始化，尝试重新获取";
+        m_audioEngine = AudioEngine::instance();
+        if (!m_audioEngine) {
+            qDebug() << "[播放按钮] 重新获取AudioEngine失败";
+            updateStatusBar("音频引擎未就绪", 2000);
             return;
         }
+        qDebug() << "[播放按钮] 重新获取AudioEngine成功:" << m_audioEngine;
     }
     
-    // 如果当前标签下没有歌曲，检查是否有选中的标签
-    QString selectedTag;
-    if (m_tagListWidget && m_tagListWidget->currentItem()) {
-        selectedTag = m_tagListWidget->currentItem()->text();
+    // 添加调试信息
+    m_audioEngine->debugAudioState();
+    
+    AudioTypes::AudioState currentState = m_audioEngine->state();
+    int playlistSize = m_audioEngine->playlist().size();
+    int currentIndex = m_audioEngine->currentIndex();
+    
+    qDebug() << "[播放按钮] 当前音频状态:" << static_cast<int>(currentState);
+    qDebug() << "[播放按钮] 当前播放列表大小:" << playlistSize;
+    qDebug() << "[播放按钮] 当前播放索引:" << currentIndex;
+    qDebug() << "[播放按钮] 当前歌曲:" << (m_audioEngine->currentSong().isValid() ? m_audioEngine->currentSong().filePath() : "无效歌曲");
+    
+    // 首先检查播放列表是否为空或索引无效
+    if (playlistSize == 0 || currentIndex < 0) {
+        qDebug() << "[播放按钮] 播放列表为空或索引无效，开始新播放";
+        startNewPlayback();
+        return;
     }
     
-    // 如果没有选中标签或当前标签下没有歌曲，选择"我的歌曲"标签
-    if (selectedTag.isEmpty() || m_songListWidget->count() == 0) {
-        qDebug() << "[播放控制] 当前标签下没有歌曲，切换到'我的歌曲'标签";
-        // 查找并选中"我的歌曲"标签
-        for (int i = 0; i < m_tagListWidget->count(); ++i) {
-            QListWidgetItem* tagItem = m_tagListWidget->item(i);
-            if (tagItem && tagItem->text() == "我的歌曲") {
-                m_tagListWidget->setCurrentItem(tagItem);
-                // 更新歌曲列表
-                updateSongList();
-                // 如果有歌曲，播放第一首
-                if (m_songListWidget->count() > 0) {
-                    QListWidgetItem* firstSongItem = m_songListWidget->item(0);
-                    if (firstSongItem) {
-                        m_songListWidget->setCurrentItem(firstSongItem);
-                        onSongListItemDoubleClicked(firstSongItem);
+    // 播放列表不为空时的播放/暂停逻辑
+    switch (currentState) {
+        case AudioTypes::AudioState::Playing:
+            qDebug() << "[播放按钮] 正在播放，执行暂停";
+            m_audioEngine->pause();
+            break;
+            
+        case AudioTypes::AudioState::Paused:
+            qDebug() << "[播放按钮] 已暂停，恢复播放";
+            m_audioEngine->play();
+            break;
+            
+        case AudioTypes::AudioState::Loading:
+            qDebug() << "[播放按钮] 正在加载中，等待完成";
+            updateStatusBar("正在加载媒体文件...", 2000);
+            break;
+            
+        case AudioTypes::AudioState::Error:
+            qDebug() << "[播放按钮] 播放出错，尝试重新播放";
+            m_audioEngine->play();
+            break;
+            
+        default:
+            qDebug() << "[播放按钮] 其他状态，开始播放";
+            m_audioEngine->play();
+            break;
+    }
+    
+    // 操作后再次调试
+    QTimer::singleShot(100, [this]() {
+        if (m_audioEngine) {
+            qDebug() << "[播放按钮] 操作后的状态:";
+            m_audioEngine->debugAudioState();
+        }
+    });
+}
+
+void MainWindowController::startNewPlayback()
+{
+    qDebug() << "[startNewPlayback] 开始新播放逻辑";
+    
+    if (!m_songListWidget) {
+        qDebug() << "[startNewPlayback] 歌曲列表控件未初始化";
+        updateStatusBar("歌曲列表未初始化", 2000);
+        return;
+    }
+    
+    // 检查当前歌曲列表是否有歌曲
+    if (m_songListWidget->count() == 0) {
+        qDebug() << "[startNewPlayback] 当前歌曲列表为空";
+        
+        // 检查是否有用户最后选中的歌曲
+        if (m_selectedSong.isValid()) {
+            qDebug() << "[startNewPlayback] 发现用户选中的歌曲:" << m_selectedSong.title();
+            
+            // 根据选中歌曲所在的标签来构建播放列表
+            try {
+                if (m_tagManager) {
+                    QList<Tag> songTags = m_tagManager->getTagsForSong(m_selectedSong.id());
+                    
+                    if (!songTags.isEmpty()) {
+                        // 使用第一个标签
+                        Tag targetTag = songTags.first();
+                        qDebug() << "[startNewPlayback] 切换到歌曲所在标签:" << targetTag.name();
+                        
+                        // 在标签列表中找到并选中该标签
+                        if (m_tagListWidget) {
+                            for (int i = 0; i < m_tagListWidget->count(); ++i) {
+                                QListWidgetItem* tagItem = m_tagListWidget->item(i);
+                                if (tagItem) {
+                                    QVariant tagData = tagItem->data(Qt::UserRole);
+                                    if (tagData.isValid()) {
+                                        Tag tag = tagData.value<Tag>();
+                                        if (tag.id() == targetTag.id()) {
+                                            m_tagListWidget->setCurrentItem(tagItem);
+                                            updateSongList();
+                                            
+                                            // 等待歌曲列表更新后开始播放
+                                            QTimer::singleShot(100, [this]() {
+                                                if (m_songListWidget && m_songListWidget->count() > 0) {
+                                                    // 选中目标歌曲
+                                                    for (int j = 0; j < m_songListWidget->count(); ++j) {
+                                                        QListWidgetItem* songItem = m_songListWidget->item(j);
+                                                        if (songItem) {
+                                                            QVariant songData = songItem->data(Qt::UserRole);
+                                                            if (songData.isValid()) {
+                                                                Song song = songData.value<Song>();
+                                                                if (song.id() == m_selectedSong.id()) {
+                                                                    m_songListWidget->setCurrentItem(songItem);
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    qDebug() << "[startNewPlayback] 从选中歌曲所在标签开始播放";
+                                                    startPlaybackFromCurrentList();
+                                                } else {
+                                                    qDebug() << "[startNewPlayback] 选中歌曲所在标签下没有歌曲";
+                                                    updateStatusBar("选中歌曲所在标签下没有歌曲", 3000);
+                                                }
+                                            });
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                } else {
-                    updateStatusBar("没有可播放的歌曲", 2000);
                 }
+            } catch (const std::exception& e) {
+                qDebug() << "[startNewPlayback] 获取歌曲标签时发生异常:" << e.what();
+            }
+        }
+        
+        // 如果没有选中歌曲或处理失败，尝试切换到"我的歌曲"标签
+        qDebug() << "[startNewPlayback] 尝试切换到'我的歌曲'标签";
+        if (m_tagListWidget) {
+            for (int i = 0; i < m_tagListWidget->count(); ++i) {
+                QListWidgetItem* tagItem = m_tagListWidget->item(i);
+                if (tagItem && (tagItem->text() == "我的歌曲" || tagItem->text() == "全部歌曲")) {
+                    qDebug() << "[startNewPlayback] 找到'" << tagItem->text() << "'标签，切换到该标签";
+                    m_tagListWidget->setCurrentItem(tagItem);
+                    updateSongList();
+                    
+                    // 等待歌曲列表更新
+                    QTimer::singleShot(100, [this]() {
+                        if (m_songListWidget && m_songListWidget->count() > 0) {
+                            qDebug() << "[startNewPlayback] 默认标签下有歌曲，开始播放";
+                            startPlaybackFromCurrentList();
+                        } else {
+                            qDebug() << "[startNewPlayback] 默认标签下也没有歌曲";
+                            updateStatusBar("没有可播放的歌曲，请先添加歌曲", 3000);
+                        }
+                    });
+                    return;
+                }
+            }
+        }
+        
+        qDebug() << "[startNewPlayback] 没有找到默认标签";
+        updateStatusBar("没有可播放的歌曲，请先添加歌曲", 3000);
+        return;
+    }
+    
+    // 当前歌曲列表有歌曲，检查是否有选中的歌曲
+    QListWidgetItem* selectedItem = m_songListWidget->currentItem();
+    if (!selectedItem && m_songListWidget->count() > 0) {
+        // 没有选中歌曲，选择第一首
+        qDebug() << "[startNewPlayback] 没有选中歌曲，自动选择第一首";
+        m_songListWidget->setCurrentItem(m_songListWidget->item(0));
+    }
+    
+    qDebug() << "[startNewPlayback] 当前歌曲列表有歌曲，直接播放";
+    startPlaybackFromCurrentList();
+}
+
+void MainWindowController::startPlaybackFromCurrentList()
+{
+    qDebug() << "[startPlaybackFromCurrentList] 从当前列表开始播放";
+    
+    if (!m_songListWidget || !m_audioEngine) {
+        qDebug() << "[startPlaybackFromCurrentList] 组件未初始化";
+        return;
+    }
+    
+    // 检查选中的歌曲
+    QListWidgetItem* selectedItem = m_songListWidget->currentItem();
+    int targetIndex = 0; // 默认播放第一首
+    
+    if (selectedItem) {
+        qDebug() << "[startPlaybackFromCurrentList] 有选中的歌曲，播放选中的歌曲";
+        // 找到选中歌曲在列表中的索引
+        for (int i = 0; i < m_songListWidget->count(); ++i) {
+            if (m_songListWidget->item(i) == selectedItem) {
+                targetIndex = i;
                 break;
             }
         }
+    } else {
+        qDebug() << "[startPlaybackFromCurrentList] 没有选中的歌曲，播放第一首";
+        // 没有选中歌曲，选择第一首
+        if (m_songListWidget->count() > 0) {
+            m_songListWidget->setCurrentItem(m_songListWidget->item(0));
+        }
     }
-}
-
-void MainWindowController::onPauseButtonClicked()
-{
-    logInfo("暂停按钮被点击");
-    if (!m_audioEngine) {
-        logError("AudioEngine未初始化");
+    
+    // 构建播放列表
+    QList<Song> playlist;
+    for (int i = 0; i < m_songListWidget->count(); ++i) {
+        QListWidgetItem* item = m_songListWidget->item(i);
+        if (item) {
+            QVariant songData = item->data(Qt::UserRole);
+            if (songData.isValid()) {
+                Song song = songData.value<Song>();
+                if (song.isValid()) {
+                    playlist.append(song);
+                    qDebug() << "[startPlaybackFromCurrentList] 添加歌曲到播放列表:" << song.title();
+                }
+            }
+        }
+    }
+    
+    if (playlist.isEmpty()) {
+        qDebug() << "[startPlaybackFromCurrentList] 播放列表为空";
+        updateStatusBar("无法构建播放列表", 2000);
         return;
     }
-    emit pauseRequested();
+    
+    qDebug() << "[startPlaybackFromCurrentList] 设置播放列表，共" << playlist.size() << "首歌曲，目标索引:" << targetIndex;
+    
+    // 设置播放列表和当前索引
+    m_audioEngine->setPlaylist(playlist);
+    m_audioEngine->setCurrentIndex(targetIndex);
+    
+    // 开始播放
+    m_audioEngine->play();
+    
+    qDebug() << "[startPlaybackFromCurrentList] 播放请求已发送";
+    updateStatusBar(QString("开始播放: %1").arg(playlist[targetIndex].title()), 2000);
+}
+
+void MainWindowController::updatePlayButtonUI(bool isPlaying)
+{
+    if (!m_playButton) return;
+    
+    // 阻塞信号，避免UI更新时触发点击事件
+    m_playButton->blockSignals(true);
+    
+    if (isPlaying) {
+        m_playButton->setIcon(QIcon(":/new/prefix1/images/pauseIcon.png"));
+        m_playButton->setText("暂停");
+    } else {
+        m_playButton->setIcon(QIcon(":/new/prefix1/images/playIcon.png"));
+        m_playButton->setText("播放");
+    }
+    
+    // 恢复信号
+    m_playButton->blockSignals(false);
+}
+
+// 暂停按钮功能已合并到播放按钮中
+void MainWindowController::onPauseButtonClicked()
+{
+    onPlayButtonClicked();
 }
 
 
@@ -492,54 +723,12 @@ void MainWindowController::onPreviousButtonClicked()
     emit previousRequested();
 }
 
-void MainWindowController::onVolumeSliderChanged(int value)
-{
-    logInfo(QString("音量变化: %1").arg(value));
-    emit volumeChangeRequested(value);
-    updateVolumeDisplay(value);
-}
 
-void MainWindowController::onProgressSliderChanged(int value)
-{
-    logInfo(QString("进度变化: %1").arg(value));
-    // 计算实际时间位置
-    qint64 position = static_cast<qint64>(value);
-    emit seekRequested(position);
-}
-
-void MainWindowController::onMuteButtonClicked()
-{
-    logInfo("静音按钮被点击");
-    emit muteToggleRequested();
-}
 
 // 状态显示
 
 
-void MainWindowController::updateProgressBar(int value, int maximum)
-{
-    if (!m_progressBar) {
-        logWarning("进度条控件未初始化");
-        return;
-    }
-    
-    try {
-        m_progressBar->setMaximum(maximum);
-        m_progressBar->setValue(value);
-        
-        // 更新进度百分比显示
-        if (maximum > 0) {
-            int percentage = (value * 100) / maximum;
-            m_progressBar->setFormat(QString("%1%").arg(percentage));
-        } else {
-            m_progressBar->setFormat("0%");
-        }
-        
-        logDebug(QString("进度条更新: %1/%2 (%3%)").arg(value).arg(maximum).arg(maximum > 0 ? (value * 100) / maximum : 0));
-    } catch (const std::exception& e) {
-        logError(QString("更新进度条时发生错误: %1").arg(e.what()));
-    }
-}
+
 
 void MainWindowController::updatePlaybackInfo(const Song& song)
 {
@@ -592,10 +781,7 @@ void MainWindowController::updatePlaybackInfo(const Song& song)
     }
 }
 
-void MainWindowController::updateVolumeDisplay(int volume)
-{
-    updateStatusBar(QString("音量: %1%").arg(volume), 1000);
-}
+
 
 // 错误处理
 void MainWindowController::handleError(const QString& error)
@@ -635,42 +821,85 @@ void MainWindowController::setupUI()
     m_nextButton = m_mainWindow->findChild<QPushButton*>("pushButton_next");
     m_previousButton = m_mainWindow->findChild<QPushButton*>("pushButton_previous");
     m_muteButton = m_mainWindow->findChild<QPushButton*>("pushButton_mute");
-    m_progressSlider = m_mainWindow->findChild<QSlider*>("slider_progress");
     m_volumeSlider = m_mainWindow->findChild<QSlider*>("slider_volume");
     m_currentSongLabel = m_mainWindow->findChild<QLabel*>("label_song_title");
-    m_currentTimeLabel = m_mainWindow->findChild<QLabel*>("label_current_time");
-    m_totalTimeLabel = m_mainWindow->findChild<QLabel*>("label_total_time");
-    // m_volumeLabel已删除，不再查找音量标签
     m_playModeButton = m_mainWindow->findChild<QPushButton*>("pushButton_play_mode");
     
-    // pushButton_shuffle按钮已被删除，不再查找
-    // QPushButton* shuffleButton = m_mainWindow->findChild<QPushButton*>("pushButton_shuffle");
+    // 创建自定义音乐进度条组件
+    m_musicProgressBar = new MusicProgressBar(m_mainWindow);
+    m_musicProgressBar->setObjectName("musicProgressBar");
     
-    // 如果找不到时间标签，创建默认值
-    if (!m_currentTimeLabel) {
-        m_currentTimeLabel = new QLabel("00:00", m_mainWindow);
-        logInfo("未找到当前时间标签，创建默认标签");
+    // 查找音量相关控件
+    m_volumeLabel = m_mainWindow->findChild<QLabel*>("label_volume_value");
+    m_volumeIconLabel = m_mainWindow->findChild<QLabel*>("label_volume_icon");
+    
+    // 如果找不到音量标签，创建一个
+    if (!m_volumeLabel) {
+        m_volumeLabel = new QLabel("50%", m_mainWindow);
+        m_volumeLabel->setObjectName("label_volume_value");
+        m_volumeLabel->setStyleSheet("QLabel { color: #666; font-size: 10px; }");
+        m_volumeLabel->setAlignment(Qt::AlignCenter);
+        m_volumeLabel->setMinimumWidth(30);
+        m_volumeLabel->setMaximumWidth(40);
+        
+        // 添加到音量框架中
+        QFrame* volumeFrame = m_mainWindow->findChild<QFrame*>("frame_volume");
+        if (volumeFrame) {
+            QHBoxLayout* layout = qobject_cast<QHBoxLayout*>(volumeFrame->layout());
+            if (layout) {
+                layout->addWidget(m_volumeLabel);
+            }
+        }
     }
-    if (!m_totalTimeLabel) {
-        m_totalTimeLabel = new QLabel("00:00", m_mainWindow);
-        logInfo("未找到总时长标签，创建默认标签");
+    
+    // 将自定义音乐进度条组件添加到进度条框架中
+    QFrame* progressFrame = m_mainWindow->findChild<QFrame*>("frame_progress");
+    if (progressFrame) {
+        // 创建垂直布局以匹配MusicProgressBar的内部结构
+        QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(progressFrame->layout());
+        if (!layout) {
+            layout = new QVBoxLayout(progressFrame);
+            layout->setContentsMargins(8, 5, 8, 5);
+            layout->setSpacing(2);
+            progressFrame->setLayout(layout);
+        }
+        // 清除原有控件
+        QLayoutItem* item;
+        while ((item = layout->takeAt(0)) != nullptr) {
+            if (item->widget()) {
+                item->widget()->deleteLater();
+            }
+            delete item;
+        }
+        // 添加自定义进度条组件
+        layout->addWidget(m_musicProgressBar);
+        
+        // 设置进度条组件的尺寸策略
+        m_musicProgressBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_musicProgressBar->setMinimumHeight(50);
+        m_musicProgressBar->setMaximumHeight(70);
+        
+        logInfo("自定义音乐进度条组件已添加到界面");
+    } else {
+        logWarning("未找到进度条框架，无法添加自定义音乐进度条组件");
     }
-    // 音量标签已删除，不再在左上角显示音量
     
     // 获取AudioEngine实例
     m_audioEngine = AudioEngine::instance();
+    qDebug() << "[MainWindowController] setupUI: AudioEngine实例获取结果:" << (m_audioEngine ? "成功" : "失败");
     
     // 检查关键控件是否找到
-    if (!m_playButton) logInfo("未找到播放按钮");
+    if (!m_playButton) {
+        logWarning("未找到播放按钮");
+        qDebug() << "[MainWindowController] setupUI: 警告 - 未找到播放按钮";
+    }
     if (!m_nextButton) logInfo("未找到下一首按钮");
     if (!m_previousButton) logInfo("未找到上一首按钮");
-    if (!m_progressSlider) logInfo("未找到进度滑块");
+    // 进度条功能已集成到自定义组件中
     if (!m_volumeSlider) logInfo("未找到音量滑块");
     if (!m_tagListWidget) logInfo("未找到标签列表");
     if (!m_songListWidget) logInfo("未找到歌曲列表");
     if (!m_playModeButton) logInfo("未找到播放模式按钮");
-    // shuffleButton已删除，不再检查
-    // if (!shuffleButton) logInfo("未找到歌曲列表播放模式按钮");
     
     // 设置窗口标题
     updateWindowTitle();
@@ -679,25 +908,15 @@ void MainWindowController::setupUI()
     updateUIState();
     
     logInfo("UI控件初始化完成");
+    qDebug() << "[MainWindowController] setupUI: UI控件初始化完成";
 }
 
 void MainWindowController::setupConnections()
 {
     if (!m_mainWindow) return;
     
-    // 播放控制按钮连接
-    if (m_playButton) {
-        connect(m_playButton, &QPushButton::clicked, this, &MainWindowController::onPlayButtonClicked);
-        logDebug("播放按钮信号连接完成");
-    }
-    if (m_nextButton) {
-        connect(m_nextButton, &QPushButton::clicked, this, &MainWindowController::onNextButtonClicked);
-        logDebug("下一首按钮信号连接完成");
-    }
-    if (m_previousButton) {
-        connect(m_previousButton, &QPushButton::clicked, this, &MainWindowController::onPreviousButtonClicked);
-        logDebug("上一首按钮信号连接完成");
-    }
+    // 播放控制按钮连接已在MainWindow::setupConnections中完成，这里不再重复连接
+    // 避免重复连接导致的多次触发问题
     
     // 播放模式按钮连接
     if (m_playModeButton) {
@@ -705,14 +924,29 @@ void MainWindowController::setupConnections()
         logDebug("播放模式按钮信号连接完成");
     }
     
-    // 注意：pushButton_shuffle已被删除，不再连接
-    
-    // 滑块连接
-    if (m_progressSlider) {
-        connect(m_progressSlider, &QSlider::valueChanged, this, &MainWindowController::onProgressSliderChanged);
-        logDebug("进度滑块信号连接完成");
+    // 自定义音乐进度条组件连接
+    if (m_musicProgressBar) {
+        connect(m_musicProgressBar, &MusicProgressBar::seekRequested, [this](qint64 position) {
+            qDebug() << "[MainWindowController] ===== 收到MusicProgressBar的seekRequested信号 =====";
+            qDebug() << "[MainWindowController] 信号位置:" << position << "ms";
+            qDebug() << "[MainWindowController] AudioEngine指针:" << (m_audioEngine ? "有效" : "无效");
+            
+            if (m_audioEngine) {
+                qDebug() << "[MainWindowController] 调用AudioEngine::seek，位置:" << position << "ms";
+                m_audioEngine->seek(position);
+                qDebug() << "[MainWindowController] ✓ AudioEngine::seek调用完成";
+            } else {
+                qDebug() << "[MainWindowController] ✗ 错误：AudioEngine为空，无法执行跳转";
+            }
+            qDebug() << "[MainWindowController] ===== seekRequested信号处理完成 =====";
+        });
+        logDebug("自定义音乐进度条组件信号连接完成");
     }
+    
+    // 音量滑块连接 - 添加拖动相关信号
     if (m_volumeSlider) {
+        connect(m_volumeSlider, &QSlider::sliderPressed, this, &MainWindowController::onVolumeSliderPressed);
+        connect(m_volumeSlider, &QSlider::sliderReleased, this, &MainWindowController::onVolumeSliderReleased);
         connect(m_volumeSlider, &QSlider::valueChanged, this, &MainWindowController::onVolumeSliderChanged);
         logDebug("音量滑块信号连接完成");
     }
@@ -721,6 +955,18 @@ void MainWindowController::setupConnections()
     if (m_muteButton) {
         connect(m_muteButton, &QPushButton::clicked, this, &MainWindowController::onMuteButtonClicked);
         logDebug("静音按钮信号连接完成");
+    }
+    
+    // 音量图标点击连接 - 使用事件过滤器
+    if (m_volumeIconLabel) {
+        m_volumeIconLabel->installEventFilter(this);
+        logDebug("音量图标事件过滤器安装完成");
+    }
+    
+    // 音量标签双击连接 - 使用事件过滤器
+    if (m_volumeLabel) {
+        m_volumeLabel->installEventFilter(this);
+        logDebug("音量标签事件过滤器安装完成");
     }
     
     // 列表控件连接
@@ -751,6 +997,9 @@ void MainWindowController::setupConnections()
         connect(m_audioEngine, &AudioEngine::currentSongChanged, this, &MainWindowController::onCurrentSongChanged);
         connect(m_audioEngine, &AudioEngine::playModeChanged, this, &MainWindowController::onPlayModeChanged);
         connect(m_audioEngine, &AudioEngine::errorOccurred, this, &MainWindowController::onAudioError);
+        
+        // 注意：MusicProgressBar的更新通过MainWindowController的onPositionChanged和onDurationChanged方法处理
+        
         logDebug("AudioEngine信号连接完成");
     }
     
@@ -866,18 +1115,18 @@ void MainWindowController::setupConnections()
         }
     });
     
-    connect(this, &MainWindowController::seekRequested, [this](qint64 position) {
-        if (m_audioEngine) {
-            m_audioEngine->seek(position);
-            logInfo(QString("发送跳转请求到AudioEngine: %1ms").arg(position));
-        }
-    });
+    // 移除重复的seekRequested连接，因为MusicProgressBar已经直接连接到AudioEngine
+    // connect(this, &MainWindowController::seekRequested, [this](qint64 position) {
+    //     if (m_audioEngine) {
+    //         m_audioEngine->seek(position);
+    //         logInfo(QString("发送跳转请求到AudioEngine: %1ms").arg(position));
+    //     }
+    // });
     
     connect(this, &MainWindowController::muteToggleRequested, [this]() {
         if (m_audioEngine) {
-            bool currentMuted = m_audioEngine->isMuted();
-            m_audioEngine->setMuted(!currentMuted);
-            logInfo(QString("发送静音切换请求到AudioEngine: %1").arg(!currentMuted ? "静音" : "取消静音"));
+            m_audioEngine->toggleMute();
+            logInfo("发送静音切换请求到AudioEngine");
         }
     });
     
@@ -887,22 +1136,11 @@ void MainWindowController::setupConnections()
 // AudioEngine信号处理槽函数
 void MainWindowController::onAudioStateChanged(AudioTypes::AudioState state)
 {
-    logInfo(QString("音频状态变化: %1").arg(static_cast<int>(state)));
+    qDebug() << "[状态变化] 收到AudioEngine状态变化信号:" << static_cast<int>(state);
     
     // 更新播放按钮状态
-    if (m_playButton) {
-        switch (state) {
-        case AudioTypes::AudioState::Playing:
-            m_playButton->setIcon(QIcon(":/new/prefix1/images/pauseIcon.png"));
-            break;
-        case AudioTypes::AudioState::Paused:
-        case AudioTypes::AudioState::Stopped:
-            m_playButton->setIcon(QIcon(":/new/prefix1/images/playIcon.png"));
-            break;
-        default:
-            break;
-        }
-    }
+    updatePlayButtonUI(state == AudioTypes::AudioState::Playing);
+    qDebug() << "[状态变化] 播放按钮状态已更新";
     
     // 更新状态栏
     QString stateText;
@@ -913,68 +1151,18 @@ void MainWindowController::onAudioStateChanged(AudioTypes::AudioState state)
     case AudioTypes::AudioState::Paused:
         stateText = "已暂停";
         break;
-    case AudioTypes::AudioState::Stopped:
-        stateText = "已停止";
+    case AudioTypes::AudioState::Loading:
+        stateText = "正在加载媒体文件...";
+        break;
+    case AudioTypes::AudioState::Error:
+        stateText = "播放出错";
         break;
     default:
         stateText = "未知状态";
         break;
     }
     updateStatusBar(stateText, 2000);
-}
-
-void MainWindowController::onPositionChanged(qint64 position)
-{
-    // 更新进度滑块
-    if (m_progressSlider && m_audioEngine && m_audioEngine->duration() > 0) {
-        m_progressSlider->blockSignals(true);
-        m_progressSlider->setValue(static_cast<int>(position));
-        m_progressSlider->blockSignals(false);
-    }
-    
-    // 更新时间显示
-    if (m_currentTimeLabel) {
-        m_currentTimeLabel->setText(formatTime(position));
-    }
-}
-
-void MainWindowController::onDurationChanged(qint64 duration)
-{
-    // 更新进度滑块最大值
-    if (m_progressSlider) {
-        m_progressSlider->setMaximum(static_cast<int>(duration));
-    }
-    
-    // 更新总时长显示
-    if (m_totalTimeLabel) {
-        m_totalTimeLabel->setText(formatTime(duration));
-    }
-    
-    logInfo(QString("歌曲时长: %1").arg(formatTime(duration)));
-}
-
-void MainWindowController::onVolumeChanged(int volume)
-{
-    // 更新音量滑块
-    if (m_volumeSlider) {
-        m_volumeSlider->blockSignals(true);
-        m_volumeSlider->setValue(volume);
-        m_volumeSlider->blockSignals(false);
-    }
-    
-    // 音量标签已删除，不再更新左上角音量显示
-    
-    logDebug(QString("音量变化: %1").arg(volume));
-}
-
-void MainWindowController::onMutedChanged(bool muted)
-{
-    if (m_muteButton) {
-        m_muteButton->setChecked(muted);
-        m_muteButton->setText(muted ? "取消静音" : "静音");
-    }
-    
-    logDebug(QString("静音状态变化: %1").arg(muted ? "已静音" : "未静音"));
+    qDebug() << "[状态变化] 状态栏已更新为:" << stateText;
 }
 
 void MainWindowController::onCurrentSongChanged(const Song& song)
@@ -1872,39 +2060,57 @@ void MainWindowController::updateTagList()
 
 void MainWindowController::updateSongList()
 {
-    if (!m_songListWidget) return;
+    qDebug() << "[updateSongList] 开始更新歌曲列表";
+    
+    if (!m_songListWidget) {
+        qDebug() << "[updateSongList] 错误：歌曲列表控件未初始化";
+        return;
+    }
     
     try {
         // 获取当前选中的标签
         QString selectedTag;
         if (m_tagListWidget && m_tagListWidget->currentItem()) {
             selectedTag = m_tagListWidget->currentItem()->text();
+            qDebug() << "[updateSongList] 当前选中标签:" << selectedTag;
+        } else {
+            qDebug() << "[updateSongList] 没有选中标签";
         }
         
         // 清空当前列表
         m_songListWidget->clear();
+        qDebug() << "[updateSongList] 已清空歌曲列表控件";
         
         // 获取歌曲列表
         QList<Song> songs;
         if (selectedTag.isEmpty() || selectedTag == "全部歌曲") {
             // 显示所有歌曲
+            qDebug() << "[updateSongList] 获取所有歌曲";
             SongDao songDao;
             songs = songDao.getAllSongs();
+            qDebug() << "[updateSongList] 从数据库获取到" << songs.size() << "首歌曲";
         } else {
             // 显示特定标签的歌曲
+            qDebug() << "[updateSongList] 获取标签'" << selectedTag << "'的歌曲";
             SongDao songDao;
             TagDao tagDao;
             Tag tag = tagDao.getTagByName(selectedTag);
             if (tag.isValid()) {
+                qDebug() << "[updateSongList] 找到标签，ID:" << tag.id();
                 songs = songDao.getSongsByTag(tag.id());
+                qDebug() << "[updateSongList] 标签'" << selectedTag << "'下有" << songs.size() << "首歌曲";
+            } else {
+                qDebug() << "[updateSongList] 警告：标签'" << selectedTag << "'不存在";
             }
         }
         
         // 添加歌曲到列表
+        qDebug() << "[updateSongList] 开始添加歌曲到列表控件";
         for (const auto& song : songs) {
             // 调试：检查歌曲ID
-            logInfo(QString("添加歌曲到列表: ID=%1, 标题=%2, 艺术家=%3")
-                   .arg(song.id()).arg(song.title()).arg(song.artist()));
+            qDebug() << "[updateSongList] 添加歌曲: ID=" << song.id() 
+                     << ", 标题=" << song.title() 
+                     << ", 艺术家=" << song.artist();
             
             QListWidgetItem* item = new QListWidgetItem();
             item->setText(QString("%1 - %2").arg(song.artist(), song.title()));
@@ -1915,15 +2121,20 @@ void MainWindowController::updateSongList()
             m_songListWidget->addItem(item);
         }
         
+        qDebug() << "[updateSongList] 歌曲列表控件现在有" << m_songListWidget->count() << "个项目";
+        
         // 更新状态栏
         updateStatusBar(QString("共 %1 首歌曲").arg(songs.size()), 3000);
         
         logInfo(QString("歌曲列表更新完成，共 %1 首歌曲").arg(songs.size()));
         
     } catch (const std::exception& e) {
+        qDebug() << "[updateSongList] 异常:" << e.what();
         logError(QString("更新歌曲列表时发生异常: %1").arg(e.what()));
         showErrorDialog("更新歌曲列表失败", QString("发生异常: %1").arg(e.what()));
     }
+    
+    qDebug() << "[updateSongList] 歌曲列表更新完成";
 }
 
 void MainWindowController::updatePlaybackControls()
@@ -1936,11 +2147,7 @@ void MainWindowController::updatePlaybackControls()
         m_playButton->setIcon(QIcon(isPlaying ? ":/new/prefix1/images/pauseIcon.png" : ":/new/prefix1/images/playIcon.png"));
     }
     
-    // 更新进度条
-    if (m_progressSlider && m_audioEngine->duration() > 0) {
-        m_progressSlider->setMaximum(static_cast<int>(m_audioEngine->duration()));
-        m_progressSlider->setValue(static_cast<int>(m_audioEngine->position()));
-    }
+    // 进度条更新由自定义MusicProgressBar组件处理
     
     // 更新音量滑块
     if (m_volumeSlider) {
@@ -1972,20 +2179,8 @@ void MainWindowController::updateVolumeControls()
 
 void MainWindowController::updateProgressControls()
 {
-    if (!m_audioEngine || !m_progressSlider) return;
-    
-    qint64 position = m_audioEngine->position();
-    qint64 duration = m_audioEngine->duration();
-    
-    // 更新进度滑块
-    if (duration > 0) {
-        m_progressSlider->blockSignals(true);
-        m_progressSlider->setMaximum(static_cast<int>(duration));
-        m_progressSlider->setValue(static_cast<int>(position));
-        m_progressSlider->blockSignals(false);
-    }
-    
-    logDebug(QString("进度控件更新: %1/%2").arg(position).arg(duration));
+    // 进度条更新由自定义MusicProgressBar组件处理
+    logDebug("进度控件更新已由MusicProgressBar组件接管");
 }
 
 void MainWindowController::updateCurrentSongInfo()
@@ -2206,10 +2401,6 @@ void MainWindowController::handlePlaybackStateChange()
         case AudioTypes::AudioState::Paused:
             setState(MainWindowState::Paused);
             updateStatusBar("已暂停", 1000);
-            break;
-        case AudioTypes::AudioState::Stopped:
-            setState(MainWindowState::Ready);
-            updateStatusBar("已停止", 1000);
             break;
         case AudioTypes::AudioState::Loading:
             setState(MainWindowState::Loading);
@@ -3119,7 +3310,6 @@ void MainWindowController::togglePlayPause()
             break;
             
         case AudioTypes::AudioState::Paused:
-        case AudioTypes::AudioState::Stopped:
             m_audioEngine->play();
             logInfo("音频播放已开始");
             updateStatusBar("开始播放", 2000);
@@ -3415,4 +3605,262 @@ void MainWindowController::onDeleteSelectedButtonClicked()
 {
     qDebug() << "MainWindowController::onDeleteSelectedButtonClicked() - 删除选中按钮被点击";
     deleteSelectedSongs();
+}
+
+// 实现新的进度条相关方法
+// 旧的进度条相关槽函数已删除，现在使用自定义音乐进度条组件
+
+// 实现新的音量条相关方法
+void MainWindowController::onVolumeSliderPressed()
+{
+    qDebug() << "[音量条] 滑块被按下";
+    m_isVolumeSliderPressed = true;
+}
+
+void MainWindowController::onVolumeSliderReleased()
+{
+    qDebug() << "[音量条] 滑块被释放";
+    m_isVolumeSliderPressed = false;
+    
+    // 发送音量变更请求
+    if (m_volumeSlider) {
+        int volume = m_volumeSlider->value();
+        emit volumeChangeRequested(volume);
+        qDebug() << "[音量条] 发送音量变更请求:" << volume;
+    }
+}
+
+void MainWindowController::onVolumeSliderChanged(int value)
+{
+    // 更新音量显示
+    updateVolumeDisplay(value);
+    
+    // 只有在非拖动状态下才发送音量变更请求
+    if (!m_isVolumeSliderPressed) {
+        logInfo(QString("音量变化: %1").arg(value));
+        emit volumeChangeRequested(value);
+    }
+}
+
+void MainWindowController::onMuteButtonClicked()
+{
+    logInfo("静音按钮被点击");
+    
+    if (!m_audioEngine) {
+        logWarning("AudioEngine未初始化");
+        return;
+    }
+    
+    // 使用AudioEngine的toggleMute方法
+    m_audioEngine->toggleMute();
+    
+    // 更新静音按钮状态
+    updateMuteButtonState();
+}
+
+void MainWindowController::onVolumeLabelDoubleClicked()
+{
+    qDebug() << "[音量标签] 双击事件触发";
+    showVolumeEditDialog();
+}
+
+void MainWindowController::showVolumeEditDialog()
+{
+    if (!m_volumeSlider) {
+        logWarning("音量滑块未初始化");
+        return;
+    }
+    
+    int currentVolume = m_volumeSlider->value();
+    bool ok;
+    int newVolume = QInputDialog::getInt(m_mainWindow, 
+                                        "设置音量", 
+                                        "请输入音量大小 (0-100):", 
+                                        currentVolume, 
+                                        0, 
+                                        100, 
+                                        1, 
+                                        &ok);
+    
+    if (ok) {
+        qDebug() << "[音量编辑] 用户输入音量:" << newVolume;
+        
+        // 更新音量滑块
+        m_volumeSlider->setValue(newVolume);
+        
+        // 发送音量变更请求
+        emit volumeChangeRequested(newVolume);
+        
+        // 更新显示
+        updateVolumeDisplay(newVolume);
+        
+        logInfo(QString("音量已设置为: %1").arg(newVolume));
+    }
+}
+
+// 更新音量显示方法
+void MainWindowController::updateVolumeDisplay(int volume)
+{
+    // 更新音量标签
+    if (m_volumeLabel) {
+        m_volumeLabel->setText(QString("%1%").arg(volume));
+    }
+    
+    // 更新音量图标
+    if (m_volumeIconLabel) {
+        if (volume == 0) {
+            m_volumeIconLabel->setText("🔇"); // 静音
+        } else if (volume < 30) {
+            m_volumeIconLabel->setText("🔈"); // 低音量
+        } else if (volume < 70) {
+            m_volumeIconLabel->setText("🔉"); // 中音量
+        } else {
+            m_volumeIconLabel->setText("🔊"); // 高音量
+        }
+    }
+    
+    // 更新状态栏
+    updateStatusBar(QString("音量: %1%").arg(volume), 1000);
+}
+
+// 更新静音按钮状态
+void MainWindowController::updateMuteButtonState()
+{
+    if (!m_audioEngine || !m_muteButton) return;
+    
+    bool isMuted = m_audioEngine->isMuted();
+    
+    if (isMuted) {
+        m_muteButton->setText("🔇");
+        m_muteButton->setToolTip("取消静音");
+    } else {
+        m_muteButton->setText("🔊");
+        m_muteButton->setToolTip("静音");
+    }
+}
+
+// 更新进度条显示
+void MainWindowController::updateProgressBar(int value, int maximum)
+{
+    // 进度条更新由自定义MusicProgressBar组件处理
+    logDebug(QString("进度条更新请求: %1/%2").arg(formatTime(static_cast<qint64>(value))).arg(formatTime(static_cast<qint64>(maximum))));
+}
+
+// 在onPositionChanged方法中更新进度条
+void MainWindowController::onPositionChanged(qint64 position)
+{
+    // 更新自定义音乐进度条组件的位置
+    if (m_musicProgressBar) {
+        m_musicProgressBar->updatePosition(position);
+    }
+    qDebug() << "[进度条] 位置更新:" << formatTime(position);
+}
+
+// 在onDurationChanged方法中更新进度条最大值
+void MainWindowController::onDurationChanged(qint64 duration)
+{
+    // 更新自定义音乐进度条组件的时长
+    if (m_musicProgressBar) {
+        m_musicProgressBar->updateDuration(duration);
+        m_musicProgressBar->setRange(0, duration);
+    }
+    qDebug() << "[进度条] 设置时长范围: 0 -" << formatTime(duration);
+    qDebug() << "[进度条] 更新总时长显示:" << formatTime(duration);
+    
+    logInfo(QString("歌曲时长: %1").arg(formatTime(duration)));
+}
+
+// 在onVolumeChanged方法中更新音量显示
+void MainWindowController::onVolumeChanged(int volume)
+{
+    // 更新音量滑块
+    if (m_volumeSlider) {
+        m_volumeSlider->blockSignals(true);
+        m_volumeSlider->setValue(volume);
+        m_volumeSlider->blockSignals(false);
+    }
+    
+    // 更新音量显示
+    updateVolumeDisplay(volume);
+    
+    logInfo(QString("音量已更新: %1").arg(volume));
+}
+
+// 在onMutedChanged方法中更新静音状态
+void MainWindowController::onMutedChanged(bool muted)
+{
+    // 更新静音按钮状态
+    updateMuteButtonState();
+    
+    // 更新音量显示
+    if (m_volumeSlider) {
+        int volume = muted ? 0 : m_volumeSlider->value();
+        updateVolumeDisplay(volume);
+    }
+    
+    logInfo(QString("静音状态已更新: %1").arg(muted ? "静音" : "取消静音"));
+}
+
+// 添加事件过滤器方法来处理进度条鼠标悬停
+bool MainWindowController::eventFilter(QObject* obj, QEvent* event)
+{
+    // 进度条事件处理由自定义MusicProgressBar组件处理
+    if (obj == m_volumeIconLabel) {
+        switch (event->type()) {
+            case QEvent::MouseButtonPress:
+                // 音量图标被点击
+                onVolumeIconClicked();
+                return true; // 事件已处理
+                
+            default:
+                break;
+        }
+    }
+    else if (obj == m_volumeLabel) {
+        switch (event->type()) {
+            case QEvent::MouseButtonDblClick:
+                // 音量标签被双击
+                onVolumeLabelDoubleClicked();
+                return true; // 事件已处理
+                
+            default:
+                break;
+        }
+    }
+    
+    // 调用基类的事件过滤器
+    return QObject::eventFilter(obj, event);
+}
+
+// 添加音量图标点击处理方法
+void MainWindowController::onVolumeIconClicked()
+{
+    qDebug() << "[音量图标] 点击事件触发";
+    
+    if (!m_audioEngine) {
+        logWarning("AudioEngine未初始化");
+        return;
+    }
+    
+    bool isMuted = m_audioEngine->isMuted();
+    
+    if (isMuted) {
+        // 取消静音，恢复之前的音量
+        if (m_volumeSlider) {
+            m_volumeSlider->setValue(m_lastVolumeBeforeMute);
+        }
+        m_audioEngine->setMuted(false);
+        logInfo("点击音量图标取消静音，恢复音量");
+    } else {
+        // 静音，保存当前音量
+        if (m_volumeSlider) {
+            m_lastVolumeBeforeMute = m_volumeSlider->value();
+            m_volumeSlider->setValue(0);
+        }
+        m_audioEngine->setMuted(true);
+        logInfo("点击音量图标启用静音");
+    }
+    
+    // 更新静音按钮状态
+    updateMuteButtonState();
 }

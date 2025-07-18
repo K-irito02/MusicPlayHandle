@@ -41,6 +41,9 @@
 #include <QThread>
 #include <QFuture>
 #include <QtConcurrent>
+#include <QToolTip>
+#include <QEvent>
+#include <QMouseEvent>
 #include <memory>
 
 // 前向声明
@@ -52,6 +55,7 @@ class ComponentIntegration;
 class AddSongDialogController;
 class PlayInterfaceController;
 class ManageTagDialogController;
+class MusicProgressBar;
 
 #include "../../models/song.h"
 #include "../../models/tag.h"
@@ -179,6 +183,7 @@ public:
     void updateProgressBar(int value, int maximum = 100);
     void updatePlaybackInfo(const Song& song);
     void updateVolumeDisplay(int volume);
+    void updateMuteButtonState();
     
     // 错误处理
     void handleError(const QString& error);
@@ -227,11 +232,13 @@ public slots:
     // 播放控制事件
     void onPlayButtonClicked();
     void onPauseButtonClicked();
+    void startNewPlayback();
+    void startPlaybackFromCurrentList();
+    void updatePlayButtonUI(bool isPlaying);
 
     void onNextButtonClicked();
     void onPreviousButtonClicked();
     void onVolumeSliderChanged(int value);
-    void onProgressSliderChanged(int value);
     void onMuteButtonClicked();
     
     // 歌曲列表控制按钮事件
@@ -296,6 +303,21 @@ public slots:
     void importPlaylistFromFile();
     void refreshPlaylistView();
     
+    // 进度条相关槽函数已移至MusicProgressBar组件
+    
+    // 音量条相关槽函数
+    void onVolumeSliderPressed();
+    void onVolumeSliderReleased();
+    void onVolumeLabelDoubleClicked();
+    
+    // 进度条悬停功能已移至MusicProgressBar组件
+    
+    // 音量编辑
+    void showVolumeEditDialog();
+
+    // 音量图标点击
+    void onVolumeIconClicked();
+
 signals:
     // 状态变化信号
     void stateChanged(MainWindowState state);
@@ -333,6 +355,12 @@ signals:
     void errorOccurred(const QString& error);
     
 private:
+    // 音量条相关成员变量
+    bool m_isVolumeSliderPressed;
+    int m_lastVolumeBeforeMute;
+    QLabel* m_volumeLabel;  // 音量显示标签
+    QLabel* m_volumeIconLabel;  // 音量图标标签
+    
     // 主窗口引用
     MainWindow* m_mainWindow;
     
@@ -357,10 +385,7 @@ private:
     QFrame* m_songFrame;
     QFrame* m_playbackFrame;
     QLabel* m_currentSongLabel;
-    QLabel* m_currentTimeLabel;     // 当前播放时间标签
-    QLabel* m_totalTimeLabel;       // 总时长标签
-    // QLabel* m_volumeLabel;          // 音量显示标签已删除
-    QSlider* m_progressSlider;
+    MusicProgressBar* m_musicProgressBar;  // 自定义音乐进度条组件
     QSlider* m_volumeSlider;
     QPushButton* m_playButton;
     QPushButton* m_pauseButton;
@@ -469,6 +494,9 @@ private:
     void updateStatusMessage();
     void refreshUI();
     
+    // 事件过滤器
+    bool eventFilter(QObject* obj, QEvent* event) override;
+    
     // 错误处理
     void logError(const QString& error);
     void logInfo(const QString& message);
@@ -502,6 +530,7 @@ private:
     static const int PROGRESS_UPDATE_INTERVAL = 50; // 50ms
     static const int MAX_RECENT_FILES = 10;
     static const int MAX_SEARCH_RESULTS = 100;
+
 };
 
 #endif // MAINWINDOWCONTROLLER_H

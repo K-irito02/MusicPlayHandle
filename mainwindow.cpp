@@ -90,7 +90,6 @@ void MainWindow::setupConnections()
     } else {
         // 如果控制器未初始化，暂时连接到MainWindow的方法
         connect(ui->pushButton_play_all, &QPushButton::clicked, this, &MainWindow::onPlayAllClicked);
-
         connect(ui->pushButton_repeat, &QPushButton::clicked, this, &MainWindow::onRepeatClicked);
         connect(ui->pushButton_sort, &QPushButton::clicked, this, &MainWindow::onSortClicked);
         connect(ui->pushButton_delete, &QPushButton::clicked, this, &MainWindow::onDeleteClicked);
@@ -107,19 +106,21 @@ void MainWindow::setupConnections()
     connect(ui->listWidget_my_tags, &QListWidget::itemDoubleClicked, this, &MainWindow::onTagListItemDoubleClicked);
     connect(ui->listWidget_songs, &QListWidget::itemDoubleClicked, this, &MainWindow::onSongListItemDoubleClicked);
     
-    // 注意：TagListItem的信号连接在populateDefaultTags()方法中进行
-    
-    // 滑块信号连接
-    connect(ui->slider_progress, &QSlider::valueChanged, this, &MainWindow::onProgressSliderChanged);
-    connect(ui->slider_volume, &QSlider::valueChanged, this, &MainWindow::onVolumeSliderChanged);
+    // 滑块信号连接 - 移除这些连接，让控制器直接处理
+    // connect(ui->slider_progress, &QSlider::valueChanged, this, &MainWindow::onProgressSliderChanged);
+    // connect(ui->slider_volume, &QSlider::valueChanged, this, &MainWindow::onVolumeSliderChanged);
     
     // 如果控制器存在，连接控制器的信号
     if (m_controller) {
+        // 连接音频状态变化信号
+        connect(m_controller, &MainWindowController::stateChanged, this, &MainWindow::onAudioStateChanged);
+        
+        // 连接其他信号...
         connect(m_controller, &MainWindowController::addSongRequested, this, &MainWindow::showAddSongDialog);
-        connect(m_controller, &MainWindowController::createTagRequested, this, &MainWindow::showCreateTagDialog);
-        connect(m_controller, &MainWindowController::manageTagRequested, this, &MainWindow::showManageTagDialog);
-        connect(m_controller, &MainWindowController::playInterfaceRequested, this, &MainWindow::showPlayInterfaceDialog);
-        connect(m_controller, &MainWindowController::settingsRequested, this, &MainWindow::showSettingsDialog);
+        connect(m_controller, &MainWindowController::createTagRequested, this, &MainWindow::onActionCreateTag);
+        connect(m_controller, &MainWindowController::manageTagRequested, this, &MainWindow::onActionManageTag);
+        connect(m_controller, &MainWindowController::playInterfaceRequested, this, &MainWindow::onActionPlayInterface);
+        connect(m_controller, &MainWindowController::settingsRequested, this, &MainWindow::onActionSettings);
         connect(m_controller, &MainWindowController::errorOccurred, this, [this](const QString& error) {
             QMessageBox::critical(this, "错误", error);
         });
@@ -133,18 +134,13 @@ void MainWindow::setupUI()
     
     // 设置初始状态
     ui->pushButton_play_pause->setText("播放");
-    ui->label_current_time->setText("00:00");
-    ui->label_total_time->setText("00:00");
     ui->label_song_title->setText("未选择歌曲");
     ui->label_song_artist->setText("未知艺术家");
     
     // 设置播放模式按钮初始状态（Loop模式）
     ui->pushButton_play_pause->setText("播放");
-
     
-    // 设置滑块初始值
-    ui->slider_progress->setRange(0, 100);
-    ui->slider_progress->setValue(0);
+    // 设置音量滑块初始值
     ui->slider_volume->setRange(0, 100);
     ui->slider_volume->setValue(50);
 }
@@ -387,21 +383,49 @@ void MainWindow::onPreviousClicked()
 
 void MainWindow::onPlayPauseClicked()
 {
-    QString currentText = ui->pushButton_play_pause->text();
-    if (currentText == "播放") {
-        ui->pushButton_play_pause->setText("暂停");
-        showStatusMessage("开始播放");
-        if (m_controller) {
-            m_controller->onPlayButtonClicked();
-        }
+    qDebug() << "[MainWindow::onPlayPauseClicked] 播放/暂停按钮被点击";
+    qDebug() << "[MainWindow::onPlayPauseClicked] 当前按钮文本:" << ui->pushButton_play_pause->text();
+    
+    if (m_controller) {
+        qDebug() << "[MainWindow::onPlayPauseClicked] 调用控制器方法";
+        m_controller->onPlayButtonClicked();
     } else {
-        ui->pushButton_play_pause->setText("播放");
-        showStatusMessage("暂停播放");
-        if (m_controller) {
-            m_controller->onPauseButtonClicked();
+        qDebug() << "[MainWindow::onPlayPauseClicked] 控制器为空，使用简单逻辑";
+        // 如果没有控制器，使用简单的切换逻辑
+        QString currentText = ui->pushButton_play_pause->text();
+        if (currentText == "播放") {
+            ui->pushButton_play_pause->setText("暂停");
+            showStatusMessage("开始播放");
+        } else {
+            ui->pushButton_play_pause->setText("播放");
+            showStatusMessage("暂停播放");
         }
+        qDebug() << "播放/暂停切换:" << ui->pushButton_play_pause->text();
     }
-    qDebug() << "播放/暂停切换:" << ui->pushButton_play_pause->text();
+    
+    qDebug() << "[MainWindow::onPlayPauseClicked] 按钮点击处理完成";
+}
+
+void MainWindow::onAudioStateChanged(MainWindowState state)
+{
+    qDebug() << "[MainWindow::onAudioStateChanged] 收到状态变化信号:" << static_cast<int>(state);
+    
+    // 根据音频状态更新播放按钮文本
+    switch (state) {
+    case MainWindowState::Playing:
+        ui->pushButton_play_pause->setText("暂停");
+        qDebug() << "[MainWindow::onAudioStateChanged] 设置播放按钮文本为'暂停'";
+        break;
+    case MainWindowState::Paused:
+        ui->pushButton_play_pause->setText("播放");
+        qDebug() << "[MainWindow::onAudioStateChanged] 设置播放按钮文本为'播放'";
+        break;
+    default:
+        qDebug() << "[MainWindow::onAudioStateChanged] 不更新播放按钮文本，状态:" << static_cast<int>(state);
+        break;
+    }
+    
+    qDebug() << "[MainWindow::onAudioStateChanged] 状态变化处理完成";
 }
 
 void MainWindow::onNextClicked()
@@ -472,16 +496,7 @@ void MainWindow::onSongListItemDoubleClicked(QListWidgetItem* item)
     }
 }
 
-// 滑块事件实现
-void MainWindow::onProgressSliderChanged(int value)
-{
-    if (m_controller) {
-        m_controller->onProgressSliderChanged(value);
-    } else {
-        // 这里应该控制音频播放进度
-        qDebug() << "进度条变化:" << value;
-    }
-}
+// 进度条相关功能已由自定义MusicProgressBar组件实现
 
 void MainWindow::onVolumeSliderChanged(int value)
 {

@@ -35,6 +35,7 @@ public:
     // 音量控制
     void setVolume(int volume);
     void setMuted(bool muted);
+    void toggleMute();
     int volume() const;
     bool isMuted() const;
     
@@ -72,6 +73,13 @@ public:
     QList<Song> playHistory() const;
     void clearHistory();
     
+    // 测试方法
+    void testAudioSystem();
+    
+    // 调试方法
+    void debugAudioState() const;
+    QString getStateString() const;
+    
 signals:
     // 播放状态信号
     void stateChanged(AudioTypes::AudioState state);
@@ -104,7 +112,6 @@ private slots:
     void handlePlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void onPositionChanged(qint64 position);
     void onDurationChanged(qint64 duration);
-    void onStateChanged(QMediaPlayer::PlaybackState state);
     void onMediaStatusChanged(QMediaPlayer::MediaStatus status);
     void onErrorOccurred(QMediaPlayer::Error error);
     void onBufferProgressChanged(int progress);
@@ -135,6 +142,7 @@ private:
     qint64 m_duration;
     int m_volume;
     bool m_muted;
+    bool m_userPaused; // 用户主动暂停标志
     
     // 播放列表
     QList<Song> m_playlist;

@@ -6,6 +6,7 @@
 #include <QFileDialog>
 #include <QListWidgetItem>
 #include "src/ui/widgets/taglistitem.h"
+#include "src/ui/controllers/mainwindowcontroller.h"
 
 #include "src/audio/audiotypes.h"
 
@@ -59,8 +60,7 @@ private slots:
     void onTagListItemDoubleClicked(QListWidgetItem* item);
     void onSongListItemDoubleClicked(QListWidgetItem* item);
     
-    // 滑块事件
-    void onProgressSliderChanged(int value);
+    // 音量滑块事件
     void onVolumeSliderChanged(int value);
     void showAddSongDialog();
     void addSongs(const QStringList& filePaths);
@@ -71,6 +71,9 @@ private slots:
     void showManageTagDialog();
     void showPlayInterfaceDialog();
     void showSettingsDialog();
+    
+    // 音频状态变化处理
+    void onAudioStateChanged(MainWindowState state);
 
 private:
     Ui::MainWindow *ui;

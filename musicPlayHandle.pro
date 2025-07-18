@@ -26,6 +26,7 @@ SOURCES += \
     src/ui/controllers/PlayInterfaceController.cpp \
     src/ui/controllers/MainWindowController.cpp \
     src/ui/widgets/taglistitem.cpp \
+    src/ui/widgets/musicprogressbar.cpp \
     src/database/basedao.cpp \
     src/database/songdao.cpp \
     src/database/tagdao.cpp \
@@ -51,6 +52,7 @@ HEADERS += \
     src/managers/tagmanager.h \
     src/managers/playlistmanager.h \
     version.h \
+    src/ui/widgets/musicprogressbar.h \
     src/threading/audioworkerthread.h \
     src/core/appconfig.h \
     src/core/logger.h \

@@ -228,10 +228,11 @@ void AudioWorkerThread::stopAudio() {
 }
 
 void AudioWorkerThread::seekAudio(qint64 position) {
+    qDebug() << "[AudioWorker] 开始执行seekAudio，位置:" << position << "ms";
     AudioCommand cmd(AudioCommandType::Seek);
     cmd.int64Param = position;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued seek command to position:" << position;
+    qDebug() << "[AudioWorker] seek命令已入队，位置:" << position << "ms";
 }
 
 void AudioWorkerThread::setVolume(int volume) {
@@ -298,7 +299,9 @@ void AudioWorkerThread::handleAudioCommand(const AudioCommand& command) {
             break;
 
         case AudioCommandType::Seek:
+            qDebug() << "[AudioWorker] 执行seek命令，位置:" << command.int64Param << "ms";
             m_mediaPlayer->setPosition(command.int64Param);
+            qDebug() << "[AudioWorker] seek命令执行完成";
             break;
 
         case AudioCommandType::SetVolume:
