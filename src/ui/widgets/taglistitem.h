@@ -121,6 +121,12 @@ signals:
      */
     void tagDoubleClicked(const QString& tagName);
 
+    /**
+     * @brief 删除请求信号
+     * @param tagName 要删除的标签名称
+     */
+    void deleteRequested(const QString& tagName);
+
 protected:
     /**
      * @brief 鼠标点击事件
@@ -145,6 +151,16 @@ private slots:
      * @brief 编辑按钮点击槽函数
      */
     void onEditButtonClicked();
+
+    /**
+     * @brief 动画完成槽函数
+     */
+    void animationFinished();
+
+    /**
+     * @brief 删除按钮点击槽函数
+     */
+    void deleteClicked();
 
 private:
     /**

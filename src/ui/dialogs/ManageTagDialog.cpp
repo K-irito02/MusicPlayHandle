@@ -13,12 +13,21 @@
 #include <QTimer>
 #include <QStatusBar>
 #include <QApplication>
+#include <QCloseEvent>
 #include "../../database/databasemanager.h"
+#include <QFile> // Added for QFile::exists
 
 ManageTagDialog::ManageTagDialog(QWidget *parent)
-    : QDialog(parent), ui(new Ui::ManageTagDialog)
+    : QDialog(parent), ui(new Ui::ManageTagDialog), m_controller(nullptr), m_dataLoaded(false)
 {
     ui->setupUi(this);
+    
+    // 初始化控制器
+    m_controller = new ManageTagDialogController(this, this);
+    if (!m_controller->initialize()) {
+        qWarning() << "Failed to initialize ManageTagDialogController";
+    }
+    
     // 使用 UI 设计器生成的控件
     tagListSource = ui->listWidget_tag_list1;
     songList = ui->listWidget_song_list;
@@ -28,6 +37,7 @@ ManageTagDialog::ManageTagDialog(QWidget *parent)
     btnUndo = ui->pushButton_undo;
     btnExitNoSave = ui->pushButton_exit_discard;
     btnExitError = nullptr; // 若无报错按钮可置空
+    
     // 信号槽
     connect(tagListSource, &QListWidget::itemSelectionChanged, this, &ManageTagDialog::onSourceTagSelectionChanged);
     connect(songList, &QListWidget::itemSelectionChanged, this, &ManageTagDialog::onSongSelectionChanged);
@@ -38,8 +48,11 @@ ManageTagDialog::ManageTagDialog(QWidget *parent)
     connect(btnExitNoSave, &QPushButton::clicked, this, &ManageTagDialog::onExitNoSave);
     connect(ui->pushButton_select_all, &QPushButton::clicked, this, &ManageTagDialog::onSelectAllSongs);
     connect(ui->pushButton_deselect_all, &QPushButton::clicked, this, &ManageTagDialog::onDeselectAllSongs);
-    // TODO: 若有报错按钮，补充 connect(btnExitError, ...)
-    // TODO: 加载标签和歌曲数据，初始化状态
+    
+    // 设置UI初始状态
+    setupUI();
+    
+    // 注意：不在这里加载数据，让showEvent处理，避免重复加载
 }
 
 ManageTagDialog::~ManageTagDialog()
@@ -47,6 +60,7 @@ ManageTagDialog::~ManageTagDialog()
     if (m_controller) {
         m_controller->shutdown();
         delete m_controller;
+        m_controller = nullptr;
     }
     delete ui;
 }
@@ -91,7 +105,8 @@ void ManageTagDialog::setupUI()
 {
     // 设置UI初始状态
     setWindowTitle("管理标签");
-    setModal(true);
+    // 移除模态设置，避免阻止关闭
+    // setModal(true);
     
     updateButtonStates();
 }
@@ -574,53 +589,85 @@ void ManageTagDialog::onTargetTagSelectionChanged()
 void ManageTagDialog::showEvent(QShowEvent* event)
 {
     QDialog::showEvent(event);
-    tagListSource->clear();
-    tagListTarget->clear();
     
-    // 使用正确的TagDao构造方式
-    TagDao tagDao;
-    QList<Tag> tags = tagDao.getAllTags();
-    
-    // 歌曲标签列表（被转移）：包含所有标签（包括"我的歌曲"）
-    for (const Tag& tag : tags) {
-        // 创建自定义标签项控件
-        TagListItem* tagWidget = new TagListItem(tag.name(), tag.coverPath(), true, true);
-        
-        // 连接编辑信号
-        connect(tagWidget, &TagListItem::editRequested, this, [this, tag](const QString& tagName) {
-            // TODO: 实现标签编辑功能
-            Q_UNUSED(tagName)
-        });
-        
-        // 创建列表项并设置自定义控件
-        QListWidgetItem* item1 = new QListWidgetItem();
-        item1->setData(Qt::UserRole, tag.id());
-        item1->setSizeHint(tagWidget->sizeHint());
-        tagListSource->addItem(item1);
-        tagListSource->setItemWidget(item1, tagWidget);
+    if (m_dataLoaded) {
+        qDebug() << "ManageTagDialog::showEvent: Data already loaded, skipping re-loading.";
+        return;
     }
+
+    // 使用QTimer延迟加载数据，避免阻塞UI
+    QTimer::singleShot(100, this, [this]() {
+        loadDataAsync();
+    });
+}
+
+void ManageTagDialog::loadDataAsync()
+{
+    qDebug() << "ManageTagDialog::loadDataAsync - 开始异步加载数据";
     
-    // 歌曲标签列表（转移到）：只包含用户创建的标签（不包含"我的歌曲"）
-    for (const Tag& tag : tags) {
-        // 假设"我的歌曲"标签的名称为"我的歌曲"，过滤掉它
-        if (tag.name() != "我的歌曲") {
-            // 创建自定义标签项控件
-            TagListItem* tagWidget = new TagListItem(tag.name(), tag.coverPath(), true, true);
-            
-            // 连接编辑信号
-            connect(tagWidget, &TagListItem::editRequested, this, [this, tag](const QString& tagName) {
-                // TODO: 实现标签编辑功能
-                Q_UNUSED(tagName)
-            });
-            
-            // 创建列表项并设置自定义控件
-            QListWidgetItem* item2 = new QListWidgetItem();
-            item2->setData(Qt::UserRole, tag.id());
-            item2->setSizeHint(tagWidget->sizeHint());
-            tagListTarget->addItem(item2);
-            tagListTarget->setItemWidget(item2, tagWidget);
+    try {
+        // 检查数据库连接
+        DatabaseManager* dbManager = DatabaseManager::instance();
+        if (!dbManager || !dbManager->isValid()) {
+            qWarning() << "DatabaseManager is not available or database connection is invalid";
+            QMessageBox::warning(this, "数据库错误", "数据库连接不可用，无法加载标签数据。");
+            close();
+            return;
         }
+        
+        // 清空列表
+        tagListSource->clear();
+        tagListTarget->clear();
+        
+        // 获取标签数据
+        TagDao tagDao;
+        QList<Tag> tags = tagDao.getAllTags();
+        
+        qDebug() << "Loaded" << tags.size() << "tags from database";
+        
+        // 批量创建标签项，避免逐个处理
+        for (const Tag& tag : tags) {
+            // 简化图标路径检查，使用默认图标
+            QString iconPath = QString();
+            
+            // 创建简化的标签项（不使用复杂的TagListItem）
+            QListWidgetItem* item1 = new QListWidgetItem();
+            item1->setText(tag.name());
+            item1->setData(Qt::UserRole, tag.id());
+            item1->setToolTip(tag.description().isEmpty() ? tag.name() : tag.description());
+            tagListSource->addItem(item1);
+            
+            // 为第二个列表添加标签（排除"我的歌曲"）
+            if (tag.name() != "我的歌曲") {
+                QListWidgetItem* item2 = new QListWidgetItem();
+                item2->setText(tag.name());
+                item2->setData(Qt::UserRole, tag.id());
+                item2->setToolTip(tag.description().isEmpty() ? tag.name() : tag.description());
+                tagListTarget->addItem(item2);
+            }
+        }
+        
+        qDebug() << "Successfully loaded tags into dialog lists";
+        m_dataLoaded = true;
+        
+    } catch (const std::exception& e) {
+        qCritical() << "Exception in ManageTagDialog::loadDataAsync:" << e.what();
+        QMessageBox::critical(this, "错误", QString("加载标签数据时发生错误: %1").arg(e.what()));
+        close();
+    } catch (...) {
+        qCritical() << "Unknown exception in ManageTagDialog::loadDataAsync";
+        QMessageBox::critical(this, "错误", "加载标签数据时发生未知错误");
+        close();
     }
+}
+
+void ManageTagDialog::closeEvent(QCloseEvent* event)
+{
+    qDebug() << "ManageTagDialog::closeEvent - 对话框关闭事件";
+    
+    // 简化关闭逻辑，直接接受关闭事件
+    event->accept();
+    qDebug() << "ManageTagDialog::closeEvent - 对话框将关闭";
 }
 
 void ManageTagDialog::recordOperation(Operation::Type type, const QList<int>& songIds, const QSet<int>& sourceTagIds, const QSet<int>& targetTagIds)
@@ -665,11 +712,19 @@ void ManageTagDialog::undoLastOperation()
 
 void ManageTagDialog::commitAllOperations()
 {
-    QSqlDatabase db = QSqlDatabase::database();
+    // 使用DatabaseManager获取正确的数据库连接
+    DatabaseManager* dbManager = DatabaseManager::instance();
+    if (!dbManager || !dbManager->isValid()) {
+        QMessageBox::critical(this, tr("数据库错误"), tr("数据库连接不可用，无法保存操作！"));
+        return;
+    }
+    
+    QSqlDatabase db = dbManager->database();
     if (!db.transaction()) {
         QMessageBox::critical(this, tr("数据库错误"), tr("无法开启事务，保存失败！"));
         return;
     }
+    
     SongDao songDao;
     bool ok = true;
     for (const Operation& op : m_operationStack) {
@@ -706,6 +761,7 @@ void ManageTagDialog::commitAllOperations()
         }
         if (!ok) break;
     }
+    
     if (ok) {
         if (!db.commit()) {
             QMessageBox::critical(this, tr("数据库错误"), tr("提交事务失败，所有更改已回滚！"));
@@ -743,21 +799,32 @@ void ManageTagDialog::onUndo()
 
 void ManageTagDialog::onExitNoSave()
 {
+    qDebug() << "ManageTagDialog::onExitNoSave - 退出不保存按钮被点击";
+    
     // 退出不保存：直接关闭对话框
-    reject();
+    close();
 }
 
 void ManageTagDialog::onExitError()
 {
+    qDebug() << "ManageTagDialog::onExitError - 退出报错按钮被点击";
+    
     // 退出报错：弹窗提示并关闭
     QMessageBox::critical(this, tr("错误"), tr("发生未处理异常，已退出。"));
-    reject();
+    close();
 }
 
 // 退出并保存（可绑定到"保存"按钮）
 void ManageTagDialog::accept()
 {
-    commitAllOperations();
+    qDebug() << "ManageTagDialog::accept - 退出并保存按钮被点击";
+    
+    // 如果有未保存的操作，尝试保存
+    if (!m_operationStack.isEmpty()) {
+        commitAllOperations();
+    }
+    
+    // 无论保存是否成功，都关闭对话框
     QDialog::accept();
 }
 

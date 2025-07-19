@@ -12,7 +12,10 @@
 - **构建系统**: qmake (主要) / CMake (兼容)
 - **Qt版本**: Qt6.5.3+ (MinGW 64-bit)
 - **语言标准**: C++17
-- **开发环境**: Qt Creator
+- **开发环境**: Qt Creator 11.0.0+
+- **最后更新**: 2024年12月
+- **主要功能**: 音频播放、标签管理、播放历史、精确进度控制
+- **特色技术**: PreciseSlider、多线程音频处理、播放历史管理
 
 ### 🏗️ **项目架构**
 
@@ -37,8 +40,10 @@
   - `SettingsDialog` - 应用程序设置对话框
 - **自定义控件**
   - `MusicProgressBar` - 自定义音乐进度条（包含PreciseSlider）
+  - `PreciseSlider` - 精确滑块组件（毫秒级精度控制）
   - `TagListItem` - 标签列表项控件
   - `TagListItemFactory` - 标签列表项工厂
+  - `RecentPlayListItem` - 最近播放列表项组件
 
 #### 3. **业务逻辑层**
 - **音频引擎**
@@ -62,6 +67,7 @@
   - `SongDao` - 歌曲数据访问
   - `TagDao` - 标签数据访问
   - `PlaylistDao` - 播放列表数据访问
+  - `PlayHistoryDao` - 播放历史数据访问
   - `LogDao` - 日志数据访问
 - **数据模型**
   - `Song` - 歌曲信息模型
@@ -87,6 +93,10 @@
   - `Result<T>` - 结果处理模板 (错误处理)
   - `ServiceContainer` - 依赖注入容器
   - `Constants` - 系统常量定义
+- **删除功能组件**
+  - `DeleteMode` - 删除模式枚举
+  - 批量删除操作支持
+  - 多线程安全删除机制
 
 ### 📂 **项目文件结构**
 ```
@@ -94,18 +104,42 @@ MusicPlayHandle/
 ├── .clang-format             # 代码格式化配置
 ├── .gitignore               # Git忽略文件配置
 ├── musicPlayHandle.pro      # qmake项目文件 (主要)
-├── CMakeLists.txt           # CMake构建配置 (兼容)
+├── musicPlayHandle.pro.user # Qt Creator用户配置
 ├── README.md                # 项目说明文档
 ├── version.h                # 版本信息定义
 ├── main.cpp                 # 程序入口
 ├── mainwindow.h/cpp         # 主窗口实现
+├── MainWindowController_Copy.h/cpp  # 主窗口控制器备份
 ├── docs/                    # 项目文档
+│   ├── 最近播放功能实现总结.md      # 最近播放功能实现
+│   ├── 最近播放功能问题修复总结.md  # 最近播放问题修复
+│   ├── 删除功能增强与问题修复总结.md # 删除功能增强
 │   ├── 拖拽与点击进度条-最终解决及优化方案.md  # 进度条优化方案
-│   ├── 播放与暂停不可控问题.md              # 播放控制问题解决
-│   ├── PROJECT_OPTIMIZATION_SUMMARY.md      # 项目优化总结
-│   ├── OPTIMIZATION_GUIDE.md                # 详细优化指南
-│   ├── GITHUB_UPLOAD_GUIDE.md              # GitHub上传指南
-│   └── 其他技术文档...
+│   ├── PRECISE_SLIDER_FIX_GUIDE.md  # 精确滑块修复指南
+│   ├── PROGRESS_BAR_MIXED_SOLUTION.md # 进度条混合方案
+│   ├── 播放与暂停不可控问题.md      # 播放控制问题解决
+│   ├── PROJECT_OPTIMIZATION_SUMMARY.md # 项目优化总结
+│   ├── OPTIMIZATION_GUIDE.md        # 详细优化指南
+│   ├── GITHUB_UPLOAD_GUIDE.md      # GitHub上传指南
+│   ├── REFACTORING_GUIDE.md        # 重构指南
+│   ├── 重构主界面控制器方案.md      # 主界面控制器重构
+│   ├── 播放列表为空时按钮行为修复.md # 播放列表按钮修复
+│   ├── 管理与编辑音乐标签-导致进程崩溃问题.md # 标签管理崩溃修复
+│   ├── ADD_SONG_TAG_ASSOCIATION_FIX.md # 添加歌曲标签关联修复
+│   ├── MAIN_WINDOW_TAG_CREATE_FIX.md # 主窗口标签创建修复
+│   ├── FINAL_TAG_FIX_SUMMARY.md    # 标签修复最终总结
+│   ├── TAG_FIX_SUMMARY.md          # 标签修复总结
+│   ├── PLAY_BUTTON_FIX.md          # 播放按钮修复
+│   ├── PLAY_PAUSE_FIX.md           # 播放暂停修复
+│   ├── PROGRESS_BAR_DRAG_FIX.md    # 进度条拖拽修复
+│   ├── PROGRESS_BAR_FIX_SUMMARY.md # 进度条修复总结
+│   ├── 拖拽音乐进度条失效问题.md    # 进度条拖拽失效修复
+│   ├── 点击音乐条失效问题.md        # 进度条点击失效修复
+│   ├── 音乐播放失败的问题.md        # 音乐播放失败修复
+│   ├── README_AudioEngine.md       # 音频引擎说明
+│   ├── CMakeLists.txt              # CMake构建配置
+│   ├── CMakeLists_test.txt         # CMake测试配置
+│   └── build_test.bat              # 构建测试脚本
 ├── examples/                # 示例代码
 │   └── optimization_usage_example.cpp  # 优化使用示例
 ├── images/                  # UI图标资源
@@ -155,6 +189,7 @@ MusicPlayHandle/
 │   │   ├── songdao.h/cpp    # 歌曲数据访问
 │   │   ├── tagdao.h/cpp     # 标签数据访问
 │   │   ├── playlistdao.h/cpp # 播放列表数据访问
+│   │   ├── playhistorydao.h/cpp # 播放历史数据访问
 │   │   └── logdao.h/cpp     # 日志数据访问
 │   ├── interfaces/          # 接口抽象层
 │   │   ├── idatabasemanager.h  # 数据库管理接口
@@ -172,27 +207,32 @@ MusicPlayHandle/
 │   ├── threading/           # 多线程管理
 │   │   ├── audioworkerthread.h/cpp  # 音频工作线程
 │   │   └── mainthreadmanager.h/cpp  # 主线程管理
-│   └── ui/                  # 用户界面组件
-│       ├── controllers/     # UI控制器
-│       │   ├── MainWindowController.h/cpp
-│       │   ├── AddSongDialogController.h/cpp
-│       │   ├── ManageTagDialogController.h/cpp
-│       │   └── PlayInterfaceController.h/cpp
-│       ├── dialogs/         # 对话框实现
-│       │   ├── AddSongDialog.h/cpp
-│       │   ├── CreateTagDialog.h/cpp
-│       │   ├── ManageTagDialog.h/cpp
-│       │   ├── PlayInterface.h/cpp
-│       │   └── SettingsDialog.h/cpp
-│       └── widgets/         # 自定义控件
-│           ├── musicprogressbar.h/cpp  # 音乐进度条
-│           ├── taglistitem.h/cpp
-│           └── taglistitemfactory.h/cpp
+│   ├── ui/                  # 用户界面组件
+│   │   ├── controllers/     # UI控制器
+│   │   │   ├── MainWindowController.h/cpp
+│   │   │   ├── AddSongDialogController.h/cpp
+│   │   │   ├── ManageTagDialogController.h/cpp
+│   │   │   └── PlayInterfaceController.h/cpp
+│   │   ├── dialogs/         # 对话框实现
+│   │   │   ├── AddSongDialog.h/cpp
+│   │   │   ├── CreateTagDialog.h/cpp
+│   │   │   ├── ManageTagDialog.h/cpp
+│   │   │   ├── PlayInterface.h/cpp
+│   │   │   └── SettingsDialog.h/cpp
+│   │   └── widgets/         # 自定义控件
+│   │       ├── musicprogressbar.h/cpp  # 音乐进度条(PreciseSlider)
+│   │       ├── taglistitem.h/cpp       # 标签列表项
+│   │       ├── taglistitemfactory.h/cpp # 标签列表项工厂
+│   │       └── recentplaylistitem.h/cpp # 最近播放列表项
+│   └── utils/               # 工具类
 ├── tests/                   # 测试代码
 │   ├── test_tagmanager.h/cpp  # 标签管理完整测试套件
 │   ├── test_tag_fix.cpp     # 标签修复测试
 │   ├── test_play_pause.cpp  # 播放暂停测试
 │   ├── test_progress_bar_fix.cpp # 进度条修复测试
+│   ├── test_delete_functions.cpp # 删除功能测试
+│   ├── test_manage_tag_dialog.cpp # 标签管理对话框测试
+│   ├── test_playlist_empty_buttons.cpp # 播放列表空按钮测试
 │   └── debug_test.cpp       # 调试测试
 ├── translations/            # 国际化文件
 │   └── en_US.ts            # 英文翻译
@@ -240,6 +280,8 @@ MusicPlayHandle/
    - ✅ 实时播放状态监控
    - ✅ 自定义音乐进度条 (PreciseSlider)
    - ✅ 精确的拖拽和点击控制
+   - ✅ 播放历史自动记录
+   - ✅ 最近播放列表管理
 
 2. **标签管理系统**
    - ✅ 标签CRUD操作 (创建、读取、更新、删除)
@@ -256,6 +298,9 @@ MusicPlayHandle/
    - ✅ 收藏夹功能
    - ✅ 播放列表验证和权限控制
    - ✅ 最近播放列表
+   - ✅ 多选删除操作
+   - ✅ 删除模式选择
+   - ✅ 批量操作支持
 
 4. **多线程架构**
    - ✅ 音频处理独立线程 (`AudioWorkerThread`)
@@ -290,6 +335,9 @@ MusicPlayHandle/
    - ✅ 自定义控件 (标签列表项、音乐进度条)
    - ✅ Qt Designer UI文件
    - ✅ 精确的进度条控制
+   - ✅ 最近播放列表项组件
+   - ✅ 删除模式选择对话框
+   - ✅ 批量操作界面
 
 ### 🔧 **构建和运行**
 
@@ -320,13 +368,14 @@ cd musicPlayHandle
 git submodule update --init --recursive
 ```
 
-2. **使用Qt Creator构建**
-- 启动Qt Creator
-- 打开项目文件 `musicPlayHandle.pro` (推荐) 或 `CMakeLists.txt`
+2. **使用Qt Creator构建 (推荐)**
+- 启动Qt Creator 11.0.0+
+- 打开项目文件 `musicPlayHandle.pro`
 - 选择构建套件：
-  - Windows: MinGW 64-bit 或 MSVC 2019+
-  - Linux: GCC 9.0+
-  - macOS: Clang 10+
+  - Windows: Qt 6.5.3 MinGW 64-bit (推荐)
+  - Windows: Qt 6.5.3 MSVC 2019+
+  - Linux: Qt 6.5.3 GCC 9.0+
+  - macOS: Qt 6.5.3 Clang 10+
 - 配置构建模式（Debug/Release）
 - 点击构建按钮或按Ctrl+B
 
@@ -335,25 +384,25 @@ git submodule update --init --recursive
 **使用 qmake (推荐):**
 ```bash
 # Windows (MinGW)
-qmake
+qmake musicPlayHandle.pro
 mingw32-make -j4
 
 # Windows (MSVC)
-qmake
+qmake musicPlayHandle.pro
 nmake
 
 # Linux/macOS
-qmake
+qmake musicPlayHandle.pro
 make -j4
 ```
 
-**使用 CMake:**
+**使用 CMake (兼容):**
 ```bash
 # 创建并进入构建目录
 mkdir build && cd build
 
 # 配置项目
-cmake ..
+cmake .. -DCMAKE_PREFIX_PATH=/path/to/qt6
 
 # 编译项目
 cmake --build . --config Release
@@ -363,6 +412,11 @@ cmake --build . --config Release
 ./MusicPlayHandle      # Linux/macOS
 ```
 
+4. **项目配置**
+- 确保Qt多媒体模块已安装
+- 检查SQLite驱动支持
+- 验证音频编解码器支持
+
 #### 依赖检查
 - 确保Qt多媒体模块已安装
 - 检查系统音频驱动
@@ -370,10 +424,23 @@ cmake --build . --config Release
 - 确认编解码器支持（MP3/WAV/FLAC/OGG）
 
 #### 常见问题
-- 如果遇到找不到Qt库的错误，检查环境变量设置
-- 编解码器缺失问题，安装相应的Qt多媒体编解码器
-- 数据库连接错误，检查SQLite驱动
-- 音频播放问题，验证系统音频设置
+
+**构建问题:**
+- 找不到Qt库：检查环境变量设置，确保Qt 6.5.3+已正确安装
+- 编解码器缺失：安装相应的Qt多媒体编解码器包
+- 数据库连接错误：检查SQLite驱动，确保Qt SQL模块已安装
+- 音频播放问题：验证系统音频设置和驱动
+
+**运行时问题:**
+- 进度条拖拽失效：检查PreciseSlider组件是否正确初始化
+- 最近播放列表为空：检查数据库权限和PlayHistoryDao配置
+- 删除操作崩溃：确保使用最新的删除功能增强版本
+- 播放控制异常：检查AudioEngine线程安全配置
+
+**性能问题:**
+- UI响应缓慢：检查多线程配置和信号槽连接
+- 内存占用过高：检查缓存配置和对象池使用
+- 数据库操作慢：检查索引配置和查询优化
 
 ### 🎯 **技术亮点**
 
@@ -394,6 +461,22 @@ cmake --build . --config Release
   - 松耦合、高内聚的模块化架构
   - 可复用的自定义控件
   - 标准化的组件接口
+
+#### 🎵 音频播放技术
+- **精确进度控制**: 
+  - 自定义PreciseSlider组件
+  - 毫秒级精度的位置计算
+  - 流畅的拖拽和点击体验
+  - 拖拽预览绘制功能
+- **播放历史管理**: 
+  - 自动记录播放历史
+  - 最近播放列表功能
+  - 播放时间格式化显示
+  - 重复歌曲智能去重
+- **多线程音频处理**: 
+  - 线程安全的音频操作
+  - 后台线程数据库访问
+  - UI线程安全更新机制
 
 #### 🚀 性能优化
 - **缓存系统**: 
@@ -436,12 +519,19 @@ cmake --build . --config Release
   - 智能播放列表
   - 自定义进度条控制
   - 拖拽预览功能
+  - 播放历史记录
+  - 最近播放管理
+- **删除功能增强**: 
+  - 多选删除支持
+  - 删除模式选择
+  - 批量操作处理
+  - 线程安全删除
 
 ### 📋 **开发状态**
 
 #### ✅ 已完成功能 (核心架构)
 - [x] **项目架构**: 完整的分层架构和组件化设计
-- [x] **数据库系统**: SQLite集成、DAO层、事务管理
+- [x] **数据库系统**: SQLite集成、DAO层、事务管理、播放历史记录管理
 - [x] **标签管理**: 完整的CRUD操作、系统标签、用户标签、标签配置和字符串管理、标签统计和搜索功能、批量操作支持
 - [x] **播放列表**: 播放列表创建和管理、播放历史记录、收藏夹功能、播放列表验证和权限控制、最近播放列表
 - [x] **音频引擎**: 多格式支持(MP3/WAV/FLAC/OGG)、完整播放控制(播放/暂停/停止/跳转/音量)、三种播放模式(列表循环/单曲循环/随机播放)、线程安全的音频处理、实时播放状态监控
@@ -455,6 +545,42 @@ cmake --build . --config Release
 - [x] **自定义控件**: 标签列表项控件(TagListItem)和工厂(TagListItemFactory)、音乐进度条(MusicProgressBar)和精确滑块(PreciseSlider)
 - [x] **UI资源**: 完整的图标资源集合，包含播放模式图标和控制按钮图标
 
+#### ✅ 已完成功能 (高级特性)
+- [x] **最近播放功能**: 
+  - [x] 播放历史记录数据库表设计
+  - [x] PlayHistoryDao数据访问层
+  - [x] 播放时间格式显示("年/月-日/时-分-秒")
+  - [x] 按播放时间降序排列
+  - [x] 重复歌曲去重(保留最新记录)
+  - [x] 最近播放列表限制(100首)
+  - [x] 播放历史统计功能
+- [x] **删除功能增强**: 
+  - [x] 多选删除支持
+  - [x] 删除模式选择(从标签移除/彻底删除/删除播放记录)
+  - [x] 批量删除操作
+  - [x] 后台线程安全删除
+  - [x] 删除确认对话框
+  - [x] 删除结果反馈
+- [x] **进度条优化**: 
+  - [x] 自定义PreciseSlider组件
+  - [x] 精确点击跳转功能
+  - [x] 流畅拖拽体验
+  - [x] 拖拽预览绘制
+  - [x] 毫秒级精度控制
+  - [x] 线程安全的位置更新
+  - [x] 事件过滤器机制
+- [x] **播放控制优化**: 
+  - [x] 播放/暂停状态管理
+  - [x] 播放模式切换
+  - [x] 音量控制
+  - [x] 静音功能
+  - [x] 播放历史自动记录
+- [x] **多线程安全**: 
+  - [x] 后台线程数据库操作
+  - [x] UI线程安全更新
+  - [x] 信号槽异步通信
+  - [x] 线程间数据同步
+
 #### 🚧 开发中功能 (UI完善)
 - [ ] **UI美化**: 
   - [x] 基础界面布局优化
@@ -464,15 +590,21 @@ cmake --build . --config Release
 - [ ] **播放控制**: 
   - [x] 进度条拖动实现
   - [x] 音量控制功能
+  - [x] 播放/暂停切换
+  - [x] 播放模式切换
   - [ ] 播放速度控制
   - [ ] 均衡器支持
 - [ ] **播放列表**: 
   - [x] 基础播放列表管理
+  - [x] 最近播放列表
+  - [x] 播放历史记录
   - [ ] 拖拽排序功能
-  - [ ] 多选操作支持
+  - [x] 多选操作支持
   - [ ] 智能播放列表
 - [ ] **标签管理**: 
   - [x] 基础标签CRUD
+  - [x] 歌曲标签关联管理
+  - [x] 批量标签操作
   - [ ] 标签拖拽功能
   - [ ] 标签颜色定制
   - [ ] 标签层级关系
@@ -578,6 +710,9 @@ cmake --build . --config Release
   - `PROJECT_OPTIMIZATION_SUMMARY.md` - 项目优化总结
   - `OPTIMIZATION_GUIDE.md` - 详细优化指南
   - `GITHUB_UPLOAD_GUIDE.md` - GitHub上传指南
+  - `最近播放功能实现总结.md` - 最近播放功能实现
+  - `删除功能增强与问题修复总结.md` - 删除功能增强
+  - `PRECISE_SLIDER_FIX_GUIDE.md` - 精确滑块修复指南
 
 #### 📝 学习资料
 - **[笔记/](笔记/)** - 开发笔记和学习记录
@@ -588,6 +723,7 @@ cmake --build . --config Release
   - `test_tagmanager.h/cpp` - 标签管理完整测试套件
   - `test_play_pause.cpp` - 播放暂停测试
   - `test_progress_bar_fix.cpp` - 进度条修复测试
+  - `test_delete_functions.cpp` - 删除功能测试
 
 #### 🎨 资源文件
 - **[images/](images/)** - 项目图标和界面截图

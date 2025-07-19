@@ -46,6 +46,9 @@ public:
     QListWidget* getSongListWidget();
     void selectAllSongs();
     void deselectAllSongs();
+    
+    // 重置数据加载标志，允许重新加载数据
+    void resetDataLoadedFlag() { m_dataLoaded = false; }
 
 signals:
     void tagCreated(const QString& tagName);
@@ -58,6 +61,7 @@ signals:
 
 protected:
     void showEvent(QShowEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
     void accept() override;
 
 private:
@@ -68,6 +72,7 @@ private:
     QStringList m_modifiedTags;
     QStringList m_deletedTags;
     QList<SongMove> m_songMoves;
+    bool m_dataLoaded; // 添加标志防止重复加载数据
     
     // 操作历史（用于撤销）
     struct Operation {
@@ -88,6 +93,7 @@ private:
     void updateTagLists();
     void updateSongList();
     void loadSongsForTag(const QString& tag);
+    void loadDataAsync();
     void performTransfer(bool isCopy);
     void addOperation(const Operation& op);
     void showStatusMessage(const QString& message);

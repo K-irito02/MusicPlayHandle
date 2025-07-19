@@ -16,6 +16,7 @@
 
 // 前向声明
 class Logger;
+class PlayHistoryDao;
 
 // 音频引擎类 - 单例模式
 class AudioEngine : public QObject {
@@ -158,6 +159,9 @@ private:
     // 播放历史
     QList<Song> m_playHistory;
     int m_maxHistorySize;
+    
+    // 播放历史数据访问对象
+    PlayHistoryDao* m_playHistoryDao;
     
     // 内部定时器
     QTimer* m_positionTimer;

@@ -65,6 +65,9 @@ bool DatabaseManager::initialize(const QString& dbPath)
     
     qDebug() << "数据库连接成功";
     
+    // 在数据库连接打开后立即设置初始化标志
+    m_initialized = true;
+    
     // 创建表结构
     if (!createTables()) {
         logError("创建数据库表失败");
@@ -88,14 +91,30 @@ bool DatabaseManager::initialize(const QString& dbPath)
         qDebug() << "系统标签检查完成";
     }
 
-    m_initialized = true;
     qDebug() << "数据库初始化完成";
     return true;
 }
 
 bool DatabaseManager::isValid() const
 {
-    return m_initialized && m_database.isOpen() && m_database.isValid();
+    if (!m_initialized) {
+        qDebug() << "DatabaseManager::isValid() - 数据库未初始化";
+        return false;
+    }
+    
+    QSqlDatabase db = QSqlDatabase::database(CONNECTION_NAME);
+    if (!db.isValid()) {
+        qDebug() << "DatabaseManager::isValid() - 数据库连接无效";
+        return false;
+    }
+    
+    if (!db.isOpen()) {
+        qDebug() << "DatabaseManager::isValid() - 数据库连接未打开";
+        return false;
+    }
+    
+    qDebug() << "DatabaseManager::isValid() - 数据库连接有效";
+    return true;
 }
 
 QSqlDatabase DatabaseManager::database() const
@@ -105,6 +124,12 @@ QSqlDatabase DatabaseManager::database() const
 
 QSqlQuery DatabaseManager::executeQuery(const QString& queryStr)
 {
+    // 检查数据库连接状态
+    if (!isValid()) {
+        logError("查询执行失败: 数据库连接无效");
+        return QSqlQuery();
+    }
+    
     QSqlQuery query(database());
     if (!query.exec(queryStr)) {
         logError("查询执行失败: " + query.lastError().text() + " SQL: " + queryStr);
@@ -116,6 +141,12 @@ QSqlQuery DatabaseManager::executeQuery(const QString& queryStr)
 
 bool DatabaseManager::executeUpdate(const QString& queryStr)
 {
+    // 检查数据库连接状态
+    if (!isValid()) {
+        logError("更新操作失败: 数据库连接无效");
+        return false;
+    }
+    
     QSqlQuery query(database());
     if (!query.exec(queryStr)) {
         logError("更新操作失败: " + query.lastError().text() + " SQL: " + queryStr);
@@ -126,12 +157,14 @@ bool DatabaseManager::executeUpdate(const QString& queryStr)
 
 void DatabaseManager::closeDatabase()
 {
+    // 先重置初始化标志
+    m_initialized = false;
+    
     if (m_database.isOpen()) {
         m_database.close();
         qDebug() << "数据库连接已关闭";
     }
     QSqlDatabase::removeDatabase(CONNECTION_NAME);
-    m_initialized = false;
 }
 
 bool DatabaseManager::createTables()
@@ -147,6 +180,10 @@ bool DatabaseManager::createTables()
     }
     
     if (!createSongTagsTable()) {
+        return false;
+    }
+    
+    if (!createPlayHistoryTable()) {
         return false;
     }
     
@@ -267,6 +304,39 @@ bool DatabaseManager::createSongTagsTable()
     }
     
     qDebug() << "song_tags表创建成功";
+    return true;
+}
+
+bool DatabaseManager::createPlayHistoryTable()
+{
+    const QString createPlayHistorySQL = R"(
+        CREATE TABLE IF NOT EXISTS play_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            song_id INTEGER NOT NULL,
+            played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
+        )
+    )";
+
+    if (!executeUpdate(createPlayHistorySQL)) {
+        logError("创建play_history表失败");
+        return false;
+    }
+
+    // 创建索引
+    const QStringList indexes = {
+        "CREATE INDEX IF NOT EXISTS idx_play_history_song_id ON play_history(song_id)",
+        "CREATE INDEX IF NOT EXISTS idx_play_history_played_at ON play_history(played_at)"
+    };
+
+    for (const QString& indexSQL : indexes) {
+        if (!executeUpdate(indexSQL)) {
+            logError("创建play_history表索引失败: " + indexSQL);
+            return false;
+        }
+    }
+
+    qDebug() << "play_history表创建成功";
     return true;
 }
 

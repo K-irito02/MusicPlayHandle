@@ -16,6 +16,8 @@
 #include <QLocale>
 #include "src/audio/audioengine.h"
 #include <QMap>
+#include <QSqlDatabase>
+#include "src/database/databasemanager.h" // Added for DatabaseManager
 
 namespace {
 QTranslator* g_translator = nullptr;
@@ -37,9 +39,9 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "MainWindow::MainWindow() - 调用setupUI()";
     setupUI();
     
-    // 创建控制器
+    // 确保UI完全设置后再创建控制器
     qDebug() << "MainWindow::MainWindow() - 创建MainWindowController";
-    m_controller = new MainWindowController(this, this);
+    m_controller = new MainWindowController(this, this);  // 修复：第一个参数是MainWindow*，第二个参数是QObject*
     
     // 设置信号槽连接
     qDebug() << "MainWindow::MainWindow() - 设置信号槽连接";
@@ -48,7 +50,9 @@ MainWindow::MainWindow(QWidget *parent)
     // 初始化控制器（controller会负责标签列表的初始化）
     if (m_controller) {
         qDebug() << "MainWindow::MainWindow() - 初始化控制器";
-        m_controller->initialize();
+        if (!m_controller->initialize()) {
+            qWarning() << "MainWindowController初始化失败";
+        }
     }
     
     // 注释掉populateDefaultTags()，让controller完全负责标签列表管理
@@ -118,7 +122,8 @@ void MainWindow::setupConnections()
         // 连接其他信号...
         connect(m_controller, &MainWindowController::addSongRequested, this, &MainWindow::showAddSongDialog);
         connect(m_controller, &MainWindowController::createTagRequested, this, &MainWindow::onActionCreateTag);
-        connect(m_controller, &MainWindowController::manageTagRequested, this, &MainWindow::onActionManageTag);
+        // 移除这行，避免循环调用
+        // connect(m_controller, &MainWindowController::manageTagRequested, this, &MainWindow::onActionManageTag);
         connect(m_controller, &MainWindowController::playInterfaceRequested, this, &MainWindow::onActionPlayInterface);
         connect(m_controller, &MainWindowController::settingsRequested, this, &MainWindow::onActionSettings);
         connect(m_controller, &MainWindowController::errorOccurred, this, [this](const QString& error) {
@@ -234,41 +239,79 @@ void MainWindow::onActionCreateTag()
 
 void MainWindow::onActionManageTag()
 {
-    if (m_controller) {
+    if (m_controller && m_controller->isInitialized()) {
         m_controller->onActionManageTag();
     } else {
-        ManageTagDialog dialog(this);
-        dialog.setWindowTitle("管理标签");
-        dialog.show();
-        if (m_controller) {
-            m_controller->refreshTagListPublic();
+        // 检查数据库连接 - 使用DatabaseManager而不是直接检查QSqlDatabase
+        DatabaseManager* dbManager = DatabaseManager::instance();
+        if (!dbManager || !dbManager->isValid()) {
+            QMessageBox::critical(this, "数据库错误", "数据库连接不可用，无法打开标签管理对话框。");
+            return;
+        }
+        
+        try {
+            ManageTagDialog dialog(this);
+            dialog.setWindowTitle("管理标签");
+            dialog.exec(); // 使用exec()而不是show()，确保对话框模态显示并正确管理生命周期
+            if (m_controller && m_controller->isInitialized()) {
+                m_controller->refreshTagListPublic();
+            }
+        } catch (const std::exception& e) {
+            QMessageBox::critical(this, "错误", QString("打开标签管理对话框时发生错误: %1").arg(e.what()));
+        } catch (...) {
+            QMessageBox::critical(this, "错误", "打开标签管理对话框时发生未知错误");
         }
     }
 }
 
 void MainWindow::onActionPlayInterface()
 {
-    if (m_controller) {
+    if (m_controller && m_controller->isInitialized()) {
         m_controller->onActionPlayInterface();
     } else {
-        PlayInterface dialog(this);
-        dialog.setWindowTitle("播放界面");
-        dialog.show();
-        refreshPlaybackStatus();
+        // 检查数据库连接
+        DatabaseManager* dbManager = DatabaseManager::instance();
+        if (!dbManager || !dbManager->isValid()) {
+            QMessageBox::critical(this, "数据库错误", "数据库连接不可用，无法打开播放界面。");
+            return;
+        }
+        
+        try {
+            PlayInterface* dialog = new PlayInterface(this);
+            dialog->setWindowTitle("播放界面");
+            dialog->setAttribute(Qt::WA_DeleteOnClose, true);
+            dialog->show();
+            refreshPlaybackStatus();
+        } catch (const std::exception& e) {
+            QMessageBox::critical(this, "错误", QString("打开播放界面时发生错误: %1").arg(e.what()));
+        } catch (...) {
+            QMessageBox::critical(this, "错误", "打开播放界面时发生未知错误");
+        }
     }
 }
 
 void MainWindow::onActionSettings()
 {
-    if (m_controller) {
+    if (m_controller && m_controller->isInitialized()) {
         m_controller->onActionSettings();
     } else {
-        SettingsDialog dialog(this);
-        dialog.setWindowTitle("设置");
-        connect(&dialog, &SettingsDialog::settingsChanged, this, &MainWindow::refreshSettings);
-        dialog.exec();
-        // 可选：关闭后刷新主界面设置
-        // refreshSettings();
+        // 检查数据库连接
+        DatabaseManager* dbManager = DatabaseManager::instance();
+        if (!dbManager || !dbManager->isValid()) {
+            QMessageBox::critical(this, "数据库错误", "数据库连接不可用，无法打开设置对话框。");
+            return;
+        }
+        
+        try {
+            SettingsDialog dialog(this);
+            dialog.setWindowTitle("设置");
+            connect(&dialog, &SettingsDialog::settingsChanged, this, &MainWindow::refreshSettings);
+            dialog.exec();
+        } catch (const std::exception& e) {
+            QMessageBox::critical(this, "错误", QString("打开设置对话框时发生错误: %1").arg(e.what()));
+        } catch (...) {
+            QMessageBox::critical(this, "错误", "打开设置对话框时发生未知错误");
+        }
     }
 }
 

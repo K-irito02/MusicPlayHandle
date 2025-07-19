@@ -60,6 +60,20 @@ protected:
     virtual void logError(const QString& operation, const QString& error) const;
     
     /**
+     * @brief 记录信息
+     * @param operation 操作描述
+     * @param message 信息内容
+     */
+    virtual void logInfo(const QString& operation, const QString& message);
+    
+    /**
+     * @brief 记录信息 (const版本)
+     * @param operation 操作描述
+     * @param message 信息内容
+     */
+    virtual void logInfo(const QString& operation, const QString& message) const;
+    
+    /**
      * @brief 获取数据库管理器实例
      */
     virtual DatabaseManager* dbManager();

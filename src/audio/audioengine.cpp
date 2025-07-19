@@ -1,5 +1,6 @@
 #include "audioengine.h"
 #include "../core/logger.h"
+#include "../database/playhistorydao.h"
 #include <QFileInfo>
 #include <QUrl>
 #include <QStandardPaths>
@@ -37,6 +38,7 @@ AudioEngine::AudioEngine(QObject* parent)
     m_balance(0.0),
     m_speed(1.0),
     m_maxHistorySize(100),
+    m_playHistoryDao(new PlayHistoryDao(this)), // 初始化播放历史DAO
     m_positionTimer(nullptr),
     m_bufferTimer(nullptr)
 {
@@ -984,6 +986,12 @@ void AudioEngine::addToHistory(const Song& song)
     // 限制历史记录数量
     while (m_playHistory.size() > m_maxHistorySize) {
         m_playHistory.removeLast();
+    }
+    
+    // 记录到数据库
+    if (m_playHistoryDao && song.isValid()) {
+        m_playHistoryDao->addPlayRecord(song.id());
+        logPlaybackEvent("添加到数据库历史", song.title());
     }
     
     logPlaybackEvent("添加到历史", song.title());

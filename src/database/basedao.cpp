@@ -58,6 +58,18 @@ void BaseDao::logError(const QString& operation, const QString& error) const
     qCritical() << "BaseDao Error:" << fullError;
 }
 
+void BaseDao::logInfo(const QString& operation, const QString& message)
+{
+    QString fullMessage = QString("%1 操作: %2").arg(operation, message);
+    qDebug() << "BaseDao Info:" << fullMessage;
+}
+
+void BaseDao::logInfo(const QString& operation, const QString& message) const
+{
+    QString fullMessage = QString("%1 操作: %2").arg(operation, message);
+    qDebug() << "BaseDao Info:" << fullMessage;
+}
+
 DatabaseManager* BaseDao::dbManager()
 {
     return m_dbManager;

@@ -155,13 +155,13 @@ void PreciseSlider::paintEvent(QPaintEvent *event)
         double ratio = static_cast<double>(m_dragPreviewPosition) / m_duration;
         int previewX = static_cast<int>(ratio * sliderRect.width());
         
-        // 绘制预览线（垂直线）
-        QPen previewLinePen(QColor(0, 120, 215), 2); // 蓝色预览线
+        // 绘制预览线（垂直线）- 浅红色
+        QPen previewLinePen(QColor(255, 120, 120), 2); // 浅红色预览线
         painter.setPen(previewLinePen);
         painter.drawLine(previewX, 0, previewX, sliderRect.height());
         
-        // 绘制预览点（小圆点）
-        QBrush previewPointBrush(QColor(0, 120, 215));
+        // 绘制预览点（小圆点）- 深红色
+        QBrush previewPointBrush(QColor(200, 0, 0)); // 深红色圆点
         painter.setBrush(previewPointBrush);
         painter.setPen(Qt::NoPen);
         int centerY = sliderRect.height() / 2;

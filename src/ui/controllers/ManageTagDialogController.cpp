@@ -21,7 +21,7 @@ ManageTagDialogController::ManageTagDialogController(ManageTagDialog* dialog, QO
     , m_dialog(dialog)
     , m_tagManager(nullptr)
     , m_playlistManager(nullptr)
-    , m_databaseManager(nullptr)
+    , m_databaseManager(DatabaseManager::instance())  // 修复：正确初始化数据库管理器
     , m_logger(nullptr)
     , m_selectedTag1("")
     , m_selectedTag2("")
@@ -122,8 +122,14 @@ void ManageTagDialogController::loadTags()
         m_tags.clear();
         
         // 检查数据库管理器是否可用
-        if (!m_databaseManager || !m_databaseManager->isValid()) {
-            logError("Database manager not available, cannot load tags");
+        if (!m_databaseManager) {
+            logError("Database manager is null, cannot load tags");
+            updateTagLists();
+            return;
+        }
+        
+        if (!m_databaseManager->isValid()) {
+            logError("Database manager is not valid, cannot load tags");
             updateTagLists();
             return;
         }
@@ -158,8 +164,14 @@ void ManageTagDialogController::loadSongs()
         m_songs.clear();
         
         // 检查数据库管理器是否可用
-        if (!m_databaseManager || !m_databaseManager->isValid()) {
-            logError("Database manager not available, cannot load songs");
+        if (!m_databaseManager) {
+            logError("Database manager is null, cannot load songs");
+            updateSongList();
+            return;
+        }
+        
+        if (!m_databaseManager->isValid()) {
+            logError("Database manager is not valid, cannot load songs");
             updateSongList();
             return;
         }
@@ -192,8 +204,14 @@ void ManageTagDialogController::createTag(const QString& name, const QString& co
     
     try {
         // 检查数据库管理器是否可用
-        if (!m_databaseManager || !m_databaseManager->isValid()) {
-            logError("Database manager not available, cannot create tag");
+        if (!m_databaseManager) {
+            logError("Database manager is null, cannot create tag");
+            handleError("数据库不可用，无法创建标签");
+            return;
+        }
+        
+        if (!m_databaseManager->isValid()) {
+            logError("Database manager is not valid, cannot create tag");
             handleError("数据库不可用，无法创建标签");
             return;
         }
@@ -253,8 +271,14 @@ void ManageTagDialogController::deleteTag(const QString& name)
     
     try {
         // 检查数据库管理器是否可用
-        if (!m_databaseManager || !m_databaseManager->isValid()) {
-            logError("Database manager not available, cannot delete tag");
+        if (!m_databaseManager) {
+            logError("Database manager is null, cannot delete tag");
+            handleError("数据库不可用，无法删除标签");
+            return;
+        }
+        
+        if (!m_databaseManager->isValid()) {
+            logError("Database manager is not valid, cannot delete tag");
             handleError("数据库不可用，无法删除标签");
             return;
         }

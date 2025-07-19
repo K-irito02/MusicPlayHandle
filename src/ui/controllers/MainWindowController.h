@@ -63,6 +63,7 @@ class MusicProgressBar;
 #include "../../core/logger.h"
 #include "../../threading/mainthreadmanager.h"
 #include "../../audio/audiotypes.h"
+#include "../../database/playhistorydao.h"
 
 // 主窗口状态枚举
 enum class MainWindowState {
@@ -90,6 +91,13 @@ enum class SortMode {
     Duration,
     DateAdded,
     PlayCount
+};
+
+// 删除模式枚举
+enum class DeleteMode {
+    FromTag,        // 从当前标签移除
+    FromDatabase,   // 从数据库彻底删除
+    FromPlayHistory // 从播放历史删除
 };
 
 // 主窗口控制器
@@ -286,10 +294,21 @@ public slots:
     
     // 歌曲操作方法
     void showAddToTagDialog(int songId, const QString& songTitle);
-    void removeFromCurrentTag(int songId, const QString& songTitle);
+    bool removeFromCurrentTag(int songId, const QString& songTitle);
     void showEditSongDialog(int songId, const QString& songTitle);
     void showInFileExplorer(int songId, const QString& songTitle);
     void deleteSongFromDatabase(int songId, const QString& songTitle);
+    bool deletePlayHistoryRecord(int songId, const QString& songTitle);
+    void deleteSelectedPlayHistoryRecords(const QList<QListWidgetItem*>& items);
+    void deleteSelectedPlayHistoryRecordsBySongs(const QList<Song>& songs);
+    void showDeleteModeDialog(const QList<QListWidgetItem*>& items, DeleteMode mode);
+    void showDeleteModeDialogBySongs(const QList<Song>& songs, DeleteMode mode);
+    void executeDeleteOperation(const QList<QListWidgetItem*>& items, DeleteMode mode);
+    void executeDeleteOperationBySongs(const QList<Song>& songs, DeleteMode mode);
+    void removeSelectedSongsFromCurrentTag(const QList<QListWidgetItem*>& items);
+    void removeSelectedSongsFromCurrentTagBySongs(const QList<Song>& songs);
+    void deleteSelectedSongsFromDatabase(const QList<QListWidgetItem*>& items);
+    void deleteSelectedSongsFromDatabaseBySongs(const QList<Song>& songs);
     
     // 新增的歌曲列表控制方法
     void togglePlayPause();                    // 切换播放/暂停状态

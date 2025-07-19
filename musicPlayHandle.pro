@@ -27,10 +27,12 @@ SOURCES += \
     src/ui/controllers/MainWindowController.cpp \
     src/ui/widgets/taglistitem.cpp \
     src/ui/widgets/musicprogressbar.cpp \
+    src/ui/widgets/recentplaylistitem.cpp \
     src/database/basedao.cpp \
     src/database/songdao.cpp \
     src/database/tagdao.cpp \
     src/database/playlistdao.cpp \
+    src/database/playhistorydao.cpp \
     src/managers/tagmanager.cpp \
     src/managers/playlistmanager.cpp \
     src/core/appconfig.cpp \
@@ -53,6 +55,7 @@ HEADERS += \
     src/managers/playlistmanager.h \
     version.h \
     src/ui/widgets/musicprogressbar.h \
+    src/ui/widgets/recentplaylistitem.h \
     src/threading/audioworkerthread.h \
     src/core/appconfig.h \
     src/core/logger.h \
@@ -61,6 +64,7 @@ HEADERS += \
     src/database/songdao.h \
     src/database/tagdao.h \
     src/database/playlistdao.h \
+    src/database/playhistorydao.h \
     src/database/logdao.h \
     src/models/song.h \
     src/models/tag.h \

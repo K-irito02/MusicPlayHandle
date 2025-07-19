@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QStyle>
 #include <QDebug>
+#include <QFileInfo>
 
 TagListItem::TagListItem(const QString& tagName, 
                         const QString& iconPath,
@@ -214,72 +215,51 @@ void TagListItem::setupUI()
 
 void TagListItem::updateIcon()
 {
-    if (!m_iconLabel) {
+    if (m_iconPath.isEmpty()) {
+        setDefaultIcon();
         return;
     }
     
-    if (!m_iconPath.isEmpty()) {
-        // 加载自定义图标
-        QPixmap pixmap(m_iconPath);
-        if (!pixmap.isNull()) {
-            m_iconLabel->setPixmap(pixmap.scaled(ICON_SIZE, ICON_SIZE, 
-                                               Qt::KeepAspectRatio, 
-                                               Qt::SmoothTransformation));
-        } else {
-            // 如果加载失败，使用默认图标
-            setDefaultIcon();
-        }
-    } else {
-        // 使用默认图标
+    // 检查文件是否存在
+    QFileInfo fileInfo(m_iconPath);
+    if (!fileInfo.exists() || !fileInfo.isFile()) {
+        qDebug() << "Icon file does not exist:" << m_iconPath;
         setDefaultIcon();
+        return;
     }
+    
+    // 尝试加载图标
+    QPixmap pixmap(m_iconPath);
+    if (pixmap.isNull()) {
+        qDebug() << "Failed to load icon from:" << m_iconPath;
+        setDefaultIcon();
+        return;
+    }
+    
+    // 缩放图标到合适大小
+    QPixmap scaledPixmap = pixmap.scaled(ICON_SIZE, ICON_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    m_iconLabel->setPixmap(scaledPixmap);
 }
 
 void TagListItem::setDefaultIcon()
 {
-    if (!m_iconLabel) {
-        return;
-    }
-    
-    // 创建默认图标（简单的彩色方块）
+    // 创建一个简单的默认图标
     QPixmap defaultIcon(ICON_SIZE, ICON_SIZE);
     defaultIcon.fill(Qt::transparent);
     
     QPainter painter(&defaultIcon);
     painter.setRenderHint(QPainter::Antialiasing);
     
-    // 根据标签名称生成不同颜色
-    QColor iconColor;
-    if (m_tagName == "我的歌曲") {
-        iconColor = QColor("#4CAF50"); // 绿色
-    } else if (m_tagName == "最近播放") {
-        iconColor = QColor("#2196F3"); // 蓝色
-    } else if (m_tagName == "我的收藏") {
-        iconColor = QColor("#FF9800"); // 橙色
-    } else {
-        iconColor = QColor("#9C27B0"); // 紫色
-    }
+    // 绘制一个简单的标签图标
+    QRectF rect(2, 2, ICON_SIZE - 4, ICON_SIZE - 4);
+    painter.setPen(QPen(QColor("#666666"), 1));
+    painter.setBrush(QColor("#444444"));
+    painter.drawRoundedRect(rect, 3, 3);
     
-    painter.setBrush(iconColor);
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(2, 2, ICON_SIZE-4, ICON_SIZE-4, 4, 4);
-    
-    // 在图标中央绘制简单符号
-    painter.setPen(QPen(Qt::white, 2));
-    painter.setFont(QFont("Arial", 10, QFont::Bold));
-    
-    QString symbol;
-    if (m_tagName == "我的歌曲") {
-        symbol = "♪";
-    } else if (m_tagName == "最近播放") {
-        symbol = "⟲";
-    } else if (m_tagName == "我的收藏") {
-        symbol = "♥";
-    } else {
-        symbol = "#";
-    }
-    
-    painter.drawText(defaultIcon.rect(), Qt::AlignCenter, symbol);
+    // 绘制标签文字
+    painter.setPen(QColor("#CCCCCC"));
+    painter.setFont(QFont("Arial", 8));
+    painter.drawText(rect, Qt::AlignCenter, "T");
     
     m_iconLabel->setPixmap(defaultIcon);
 }
@@ -288,5 +268,19 @@ void TagListItem::updateEditButtonVisibility()
 {
     if (m_editButton) {
         m_editButton->setVisible(m_isEditable);
+    }
+}
+
+void TagListItem::animationFinished()
+{
+    // 动画完成后的处理逻辑
+    update();
+}
+
+void TagListItem::deleteClicked()
+{
+    if (m_isDeletable) {
+        // 触发删除操作
+        emit deleteRequested(m_tagName);
     }
 }

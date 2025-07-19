@@ -101,6 +101,11 @@ private:
     bool createSongTagsTable();
     
     /**
+     * @brief 创建播放历史表
+     */
+    bool createPlayHistoryTable();
+    
+    /**
      * @brief 创建日志表
      */
     bool createLogsTable();
