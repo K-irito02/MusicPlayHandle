@@ -148,6 +148,13 @@ public:
     bool songHasTag(int songId, int tagId);
     
     /**
+     * @brief 删除歌曲的所有标签关联
+     * @param songId 歌曲ID
+     * @return 操作是否成功
+     */
+    bool removeAllTagsFromSong(int songId);
+    
+    /**
      * @brief 批量插入歌曲
      * @param songs 歌曲列表
      * @return 成功插入的歌曲数量

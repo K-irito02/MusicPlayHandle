@@ -366,6 +366,21 @@ bool SongDao::songHasTag(int songId, int tagId)
     return false;
 }
 
+bool SongDao::removeAllTagsFromSong(int songId)
+{
+    const QString sql = "DELETE FROM song_tags WHERE song_id = ?";
+    QSqlQuery query = prepareQuery(sql);
+    query.addBindValue(songId);
+    
+    if (query.exec()) {
+        logInfo("removeAllTagsFromSong", QString("成功删除歌曲 %1 的所有标签关联").arg(songId));
+        return true;
+    } else {
+        logError("removeAllTagsFromSong", QString("删除歌曲 %1 的标签关联失败: %2").arg(songId).arg(query.lastError().text()));
+        return false;
+    }
+}
+
 int SongDao::insertSongs(const QList<Song>& songs)
 {
     int insertedCount = 0;

@@ -309,6 +309,12 @@ public slots:
     void removeSelectedSongsFromCurrentTagBySongs(const QList<Song>& songs);
     void deleteSelectedSongsFromDatabase(const QList<QListWidgetItem*>& items);
     void deleteSelectedSongsFromDatabaseBySongs(const QList<Song>& songs);
+    void deleteSelectedSongsCompletelyBySongs(const QList<Song>& songs);
+    
+    // 播放列表更新方法
+    void updatePlaylistAfterDeletion();        // 删除歌曲后更新播放列表
+    void resetPlayerToEmptyState();            // 重置播放器到空状态
+    void triggerRecentPlaySortUpdate();        // 触发最近播放排序更新
     
     // 新增的歌曲列表控制方法
     void togglePlayPause();                    // 切换播放/暂停状态
@@ -385,10 +391,18 @@ private:
     
     // 核心组件
     AudioEngine* m_audioEngine;
-    TagManager* m_tagManager;
     PlaylistManager* m_playlistManager;
+    TagManager* m_tagManager;
     ComponentIntegration* m_componentIntegration;
-    MainThreadManager* m_mainThreadManager;
+    
+    // 播放列表保持相关
+    QString m_lastActiveTag;           // 上次活跃的标签
+    QList<Song> m_lastPlaylist;        // 上次的播放列表
+    bool m_playlistChangedByUser;      // 用户是否主动改变了播放列表
+    bool m_shouldKeepPlaylist;         // 是否应该保持播放列表
+    
+    // 最近播放排序更新相关
+    bool m_needsRecentPlaySortUpdate;  // 是否需要更新最近播放排序
     
     // 子控制器
     std::unique_ptr<AddSongDialogController> m_addSongController;

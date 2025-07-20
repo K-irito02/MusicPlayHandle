@@ -253,6 +253,21 @@ void ManageTagDialog::performTransfer(bool isCopy)
         return;
     }
     
+    // 检查移动转移的限制：不允许从"我的歌曲"标签移动转移
+    if (!isCopy) {
+        TagDao tagDao;
+        for (int sourceTagId : selectedSourceTagIds) {
+            Tag sourceTag = tagDao.getTagById(sourceTagId);
+            if (sourceTag.name() == "我的歌曲") {
+                QMessageBox::warning(this, "操作限制", 
+                    "不允许从'我的歌曲'标签进行移动转移操作。\n"
+                    "'我的歌曲'标签包含用户的所有歌曲，只能进行复制转移。\n"
+                    "请使用'复制转移'按钮。");
+                return;
+            }
+        }
+    }
+    
     try {
         // 获取操作描述
         QString operationType = isCopy ? "复制" : "移动";
@@ -353,6 +368,18 @@ m_controller->transferSongs(sourceTag.name(), targetTag.name(), isCopy);
         // 刷新界面
         if (m_controller) {
             m_controller->refreshData();
+        }
+        
+        // 如果是移动操作，重新加载当前源标签的歌曲列表
+        if (!isCopy && !selectedSourceTagIds.isEmpty()) {
+            // 获取当前选中的源标签名称
+            TagDao tagDao;
+            int firstSourceTagId = selectedSourceTagIds.values().first();
+            Tag sourceTag = tagDao.getTagById(firstSourceTagId);
+            if (sourceTag.isValid()) {
+                qDebug() << "Reloading songs for source tag after move operation:" << sourceTag.name();
+                loadSongsForTag(sourceTag.name());
+            }
         }
         
         // 清空选择

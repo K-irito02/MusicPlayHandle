@@ -63,10 +63,14 @@ MainWindowController::MainWindowController(MainWindow* mainWindow, QObject* pare
     , m_volumeIconLabel(nullptr)
     , m_mainWindow(mainWindow)
     , m_audioEngine(nullptr)
-    , m_tagManager(nullptr)
     , m_playlistManager(nullptr)
+    , m_tagManager(nullptr)
     , m_componentIntegration(nullptr)
-    , m_mainThreadManager(nullptr)
+    , m_lastActiveTag("")
+    , m_lastPlaylist()
+    , m_playlistChangedByUser(false)
+    , m_shouldKeepPlaylist(false)
+    , m_needsRecentPlaySortUpdate(false)
     , m_addSongController(nullptr)
     , m_playInterfaceController(nullptr)
     , m_manageTagController(nullptr)
@@ -177,6 +181,16 @@ void MainWindowController::shutdown()
     
     logInfo("正在关闭主窗口控制器...");
     
+    // 场景B触发条件2：用户退出应用程序
+    // 如果在"最近播放"标签内有待更新的排序，现在触发更新
+    if (m_needsRecentPlaySortUpdate) {
+        logInfo("场景B触发条件2：用户退出应用程序，触发最近播放排序更新");
+        m_needsRecentPlaySortUpdate = false;
+        // 立即更新最近播放列表排序
+        updateSongList();
+        logInfo("最近播放列表已重新排序");
+    }
+    
     // 保存设置
     saveSettings();
     
@@ -259,11 +273,19 @@ void MainWindowController::onActionManageTag()
         connect(&dialog, &ManageTagDialog::finished, [this](int result) {
             if (result == QDialog::Accepted) {
                 logInfo("标签管理对话框被接受");
-                // 刷新标签列表
+                // 刷新标签列表和歌曲列表
                 refreshTagList();
+                refreshSongList();
             } else {
                 logInfo("标签管理对话框被取消");
             }
+        });
+        
+        // 连接歌曲移动信号
+        connect(&dialog, &ManageTagDialog::songMoved, [this](const QString& song, const QString& fromTag, const QString& toTag, bool isCopy) {
+            logInfo(QString("歌曲移动信号: %1 从 %2 到 %3, 复制=%4").arg(song).arg(fromTag).arg(toTag).arg(isCopy));
+            // 刷新歌曲列表以确保UI同步
+            refreshSongList();
         });
         
         // 显示对话框
@@ -467,11 +489,16 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
                  if (itemSongData.isValid()) {
                      Song listSong = itemSongData.value<Song>();
                      if (listSong.isValid()) {
-                         playlist.append(listSong);
-                         // 找到当前点击的歌曲在播放列表中的索引
-                         if (listSong.id() == song.id()) {
-                             targetIndex = playlist.size() - 1;
-                             qDebug() << "[双击播放] 找到目标歌曲，索引:" << targetIndex;
+                         // 检查文件格式是否支持
+                         if (m_audioEngine->isFormatSupported(listSong.filePath())) {
+                             playlist.append(listSong);
+                             // 找到当前点击的歌曲在播放列表中的索引
+                             if (listSong.id() == song.id()) {
+                                 targetIndex = playlist.size() - 1;
+                                 qDebug() << "[双击播放] 找到目标歌曲，索引:" << targetIndex;
+                             }
+                         } else {
+                             qDebug() << "[双击播放] 跳过不支持的格式:" << listSong.filePath();
                          }
                      }
                  }
@@ -479,29 +506,32 @@ void MainWindowController::onSongListItemDoubleClicked(QListWidgetItem* item)
          }
          
          if (playlist.isEmpty()) {
-             logWarning("无法构建播放列表");
-             updateStatusBar("播放失败：播放列表为空", 3000);
+             logWarning("无法构建播放列表，所有歌曲格式都不支持");
+             updateStatusBar("播放失败：没有支持的音频格式", 3000);
              return;
          }
          
          if (targetIndex == -1) {
-             logWarning("无法在播放列表中找到目标歌曲");
-             updateStatusBar("播放失败：歌曲不在列表中", 3000);
-             return;
+             logWarning("目标歌曲格式不支持，创建单曲播放列表");
+             // 如果目标歌曲格式不支持，创建单曲播放列表
+             playlist.clear();
+             playlist.append(song);
+             targetIndex = 0;
+             qDebug() << "[双击播放] 创建单曲播放列表，目标索引:" << targetIndex;
          }
          
          qDebug() << "[双击播放] 构建播放列表完成，共" << playlist.size() << "首歌曲，目标索引:" << targetIndex;
          
-         // 设置播放列表到AudioEngine
-         m_audioEngine->setPlaylist(playlist);
-         qDebug() << "[双击播放] 已设置播放列表到AudioEngine，播放列表大小:" << m_audioEngine->playlist().size();
-         
-         // 设置当前歌曲索引
-         m_audioEngine->setCurrentIndex(targetIndex);
-         qDebug() << "[双击播放] 已设置当前歌曲索引为" << targetIndex << "，当前索引:" << m_audioEngine->currentIndex();
-         
-         // 开始播放
-         m_audioEngine->play();
+                 // 设置播放列表到AudioEngine
+        m_audioEngine->setPlaylist(playlist);
+        qDebug() << "[双击播放] 已设置播放列表到AudioEngine，播放列表大小:" << m_audioEngine->playlist().size();
+        
+        // 设置当前歌曲索引（这会触发currentSongChanged信号）
+        m_audioEngine->setCurrentIndex(targetIndex);
+        qDebug() << "[双击播放] 已设置当前歌曲索引为" << targetIndex << "，当前索引:" << m_audioEngine->currentIndex();
+        
+        // 开始播放
+        m_audioEngine->play();
          qDebug() << "[双击播放] 已调用播放方法";
          
          logInfo(QString("开始播放歌曲: %1 - %2").arg(song.artist()).arg(song.title()));
@@ -547,8 +577,16 @@ void MainWindowController::onPlayButtonClicked()
     
     // 首先检查播放列表是否为空或索引无效
     if (playlistSize == 0 || currentIndex < 0) {
-        qDebug() << "[播放按钮] 播放列表为空或索引无效，开始新播放";
-        startNewPlayback();
+        qDebug() << "[播放按钮] 播放列表为空或索引无效";
+        
+        // 检查当前歌曲列表是否有歌曲可以播放
+        if (m_songListWidget && m_songListWidget->count() > 0) {
+            qDebug() << "[播放按钮] 当前歌曲列表有歌曲，开始新播放";
+            startNewPlayback();
+        } else {
+            qDebug() << "[播放按钮] 播放列表为空，显示提示";
+            updateStatusBar("播放列表为空，请先添加歌曲", 3000);
+        }
         return;
     }
     
@@ -851,10 +889,18 @@ void MainWindowController::onNextButtonClicked()
     qDebug() << "[下一首按钮] 当前播放列表大小:" << playlistSize;
     qDebug() << "[下一首按钮] 当前播放索引:" << currentIndex;
     
-    // 如果播放列表为空或索引无效，启动新播放
+    // 如果播放列表为空或索引无效
     if (playlistSize == 0 || currentIndex < 0) {
-        qDebug() << "[下一首按钮] 播放列表为空或索引无效，启动新播放";
-        startNewPlayback();
+        qDebug() << "[下一首按钮] 播放列表为空或索引无效";
+        
+        // 检查当前歌曲列表是否有歌曲可以播放
+        if (m_songListWidget && m_songListWidget->count() > 0) {
+            qDebug() << "[下一首按钮] 当前歌曲列表有歌曲，启动新播放";
+            startNewPlayback();
+        } else {
+            qDebug() << "[下一首按钮] 播放列表为空，显示提示";
+            updateStatusBar("播放列表为空，请先添加歌曲", 3000);
+        }
         return;
     }
     
@@ -877,10 +923,18 @@ void MainWindowController::onPreviousButtonClicked()
     qDebug() << "[上一首按钮] 当前播放列表大小:" << playlistSize;
     qDebug() << "[上一首按钮] 当前播放索引:" << currentIndex;
     
-    // 如果播放列表为空或索引无效，启动新播放
+    // 如果播放列表为空或索引无效
     if (playlistSize == 0 || currentIndex < 0) {
-        qDebug() << "[上一首按钮] 播放列表为空或索引无效，启动新播放";
-        startNewPlayback();
+        qDebug() << "[上一首按钮] 播放列表为空或索引无效";
+        
+        // 检查当前歌曲列表是否有歌曲可以播放
+        if (m_songListWidget && m_songListWidget->count() > 0) {
+            qDebug() << "[上一首按钮] 当前歌曲列表有歌曲，启动新播放";
+            startNewPlayback();
+        } else {
+            qDebug() << "[上一首按钮] 播放列表为空，显示提示";
+            updateStatusBar("播放列表为空，请先添加歌曲", 3000);
+        }
         return;
     }
     
@@ -1201,32 +1255,82 @@ void MainWindowController::setupConnections()
                             QMetaObject::invokeMethod(this, [this, song, playlist]() {
                                 if (!m_audioEngine) return;
                                 
-                                if (!playlist.isEmpty()) {
+                                // 检查是否需要保持播放列表
+                                if (m_shouldKeepPlaylist && !m_lastPlaylist.isEmpty() && !m_playlistChangedByUser) {
+                                    // 在保存的播放列表中查找目标歌曲
                                     int targetIndex = -1;
-                                    for (int i = 0; i < playlist.size(); ++i) {
-                                        if (playlist[i].id() == song.id()) {
+                                    for (int i = 0; i < m_lastPlaylist.size(); ++i) {
+                                        if (m_lastPlaylist[i].id() == song.id()) {
                                             targetIndex = i;
                                             break;
                                         }
                                     }
-                                    qDebug() << "[排查] targetIndex:" << targetIndex;
+                                    
                                     if (targetIndex >= 0) {
-                                        m_audioEngine->setPlaylist(playlist);
+                                        // 使用保存的播放列表
+                                        m_audioEngine->setPlaylist(m_lastPlaylist);
                                         m_audioEngine->setCurrentIndex(targetIndex);
-                                        logInfo(QString("设置播放列表，共%1首歌曲，当前索引: %2").arg(playlist.size()).arg(targetIndex));
+                                        logInfo(QString("使用保存的播放列表，共%1首歌曲，当前索引: %2").arg(m_lastPlaylist.size()).arg(targetIndex));
                                     } else {
+                                        // 目标歌曲不在保存的播放列表中，使用当前标签的播放列表
+                                        if (!playlist.isEmpty()) {
+                                            int targetIndex = -1;
+                                            for (int i = 0; i < playlist.size(); ++i) {
+                                                if (playlist[i].id() == song.id()) {
+                                                    targetIndex = i;
+                                                    break;
+                                                }
+                                            }
+                                            if (targetIndex >= 0) {
+                                                m_audioEngine->setPlaylist(playlist);
+                                                m_audioEngine->setCurrentIndex(targetIndex);
+                                                logInfo(QString("设置当前标签播放列表，共%1首歌曲，当前索引: %2").arg(playlist.size()).arg(targetIndex));
+                                            } else {
+                                                QList<Song> singleSongPlaylist = {song};
+                                                m_audioEngine->setPlaylist(singleSongPlaylist);
+                                                m_audioEngine->setCurrentIndex(0);
+                                                logInfo("歌曲不在当前标签中，创建单曲播放列表");
+                                            }
+                                        } else {
+                                            QList<Song> singleSongPlaylist = {song};
+                                            m_audioEngine->setPlaylist(singleSongPlaylist);
+                                            m_audioEngine->setCurrentIndex(0);
+                                            logInfo("当前标签无歌曲，创建单曲播放列表");
+                                        }
+                                    }
+                                } else {
+                                    // 正常播放逻辑
+                                    if (!playlist.isEmpty()) {
+                                        int targetIndex = -1;
+                                        for (int i = 0; i < playlist.size(); ++i) {
+                                            if (playlist[i].id() == song.id()) {
+                                                targetIndex = i;
+                                                break;
+                                            }
+                                        }
+                                        qDebug() << "[排查] targetIndex:" << targetIndex;
+                                        if (targetIndex >= 0) {
+                                            m_audioEngine->setPlaylist(playlist);
+                                            m_audioEngine->setCurrentIndex(targetIndex);
+                                            logInfo(QString("设置播放列表，共%1首歌曲，当前索引: %2").arg(playlist.size()).arg(targetIndex));
+                                        } else {
+                                            QList<Song> singleSongPlaylist = {song};
+                                            m_audioEngine->setPlaylist(singleSongPlaylist);
+                                            m_audioEngine->setCurrentIndex(0);
+                                            logInfo("歌曲不在当前标签中，创建单曲播放列表");
+                                        }
+                                    } else {
+                                        // 如果当前标签没有歌曲，创建单曲播放列表
                                         QList<Song> singleSongPlaylist = {song};
                                         m_audioEngine->setPlaylist(singleSongPlaylist);
                                         m_audioEngine->setCurrentIndex(0);
-                                        logInfo("歌曲不在当前标签中，创建单曲播放列表");
+                                        logInfo("当前标签无歌曲，创建单曲播放列表");
                                     }
-                                } else {
-                                    // 如果当前标签没有歌曲，创建单曲播放列表
-                                    QList<Song> singleSongPlaylist = {song};
-                                    m_audioEngine->setPlaylist(singleSongPlaylist);
-                                    m_audioEngine->setCurrentIndex(0);
-                                    logInfo("当前标签无歌曲，创建单曲播放列表");
                                 }
+                                
+                                // 标记用户已主动播放歌曲，重置播放列表保持
+                                m_playlistChangedByUser = true;
+                                m_shouldKeepPlaylist = false;
                                 
                                 qDebug() << "[排查] 调用m_audioEngine->play()前，currentIndex:" << m_audioEngine->currentIndex();
                                 m_audioEngine->play();
@@ -1353,6 +1457,45 @@ void MainWindowController::onCurrentSongChanged(const Song& song)
     qDebug() << "  文件路径:" << song.filePath();
     
     logInfo(QString("当前歌曲变化: %1 - %2").arg(song.artist(), song.title()));
+    
+    // 检查是否在"最近播放"标签下
+    QString currentTag = "";
+    if (m_tagListWidget && m_tagListWidget->currentItem()) {
+        currentTag = m_tagListWidget->currentItem()->text();
+    }
+    
+    // 检查AudioEngine的播放状态，只有在实际播放时才更新播放记录
+    bool isActuallyPlaying = false;
+    if (m_audioEngine) {
+        isActuallyPlaying = (m_audioEngine->state() == AudioTypes::AudioState::Playing);
+    }
+    
+    qDebug() << "[MainWindowController::onCurrentSongChanged] 当前播放状态:" << (isActuallyPlaying ? "播放中" : "未播放");
+    
+    // 只有在实际播放时才更新播放记录
+    if (isActuallyPlaying && song.isValid()) {
+        // 场景A：在"最近播放"标签外播放歌曲时
+        if (currentTag != "最近播放") {
+            // 立即更新时间戳
+            PlayHistoryDao playHistoryDao;
+            if (playHistoryDao.addPlayRecord(song.id())) {
+                logInfo(QString("场景A：在标签'%1'外播放歌曲 %2，立即更新播放时间").arg(currentTag).arg(song.title()));
+            }
+        }
+        // 场景B：在"最近播放"标签内播放歌曲时
+        else if (currentTag == "最近播放") {
+            // 立即更新时间戳，但不立即更新排序
+            PlayHistoryDao playHistoryDao;
+            if (playHistoryDao.addPlayRecord(song.id())) {
+                logInfo(QString("场景B：在'最近播放'标签内播放歌曲 %1，更新播放时间但不立即排序").arg(song.title()));
+                
+                // 标记需要延迟排序更新
+                m_needsRecentPlaySortUpdate = true;
+            }
+        }
+    } else {
+        qDebug() << "[MainWindowController::onCurrentSongChanged] 歌曲未实际播放，跳过播放记录更新";
+    }
     
     // 更新当前歌曲信息
     qDebug() << "[MainWindowController::onCurrentSongChanged] 调用updateCurrentSongInfo()";
@@ -2312,6 +2455,19 @@ void MainWindowController::updateSongList()
             PlayHistoryDao playHistoryDao;
             songs = playHistoryDao.getRecentPlayedSongs(100);
             qDebug() << "[updateSongList] 从播放历史获取到" << songs.size() << "首歌曲";
+            
+            // 调试：打印获取到的歌曲列表
+            qDebug() << "[updateSongList] 获取到的歌曲列表:";
+            for (int i = 0; i < songs.size(); ++i) {
+                const Song& song = songs[i];
+                QDateTime playTime = song.lastPlayedTime();
+                QString timeStr = playTime.toString("yyyy/MM-dd/hh-mm-ss");
+                qDebug() << QString("  [%1] %2 - %3  %4")
+                            .arg(i + 1)
+                            .arg(song.artist())
+                            .arg(song.title())
+                            .arg(timeStr);
+            }
         } else {
             // 显示特定标签的歌曲
             qDebug() << "[updateSongList] 获取标签'" << selectedTag << "'的歌曲";
@@ -2329,41 +2485,71 @@ void MainWindowController::updateSongList()
         
         // 添加歌曲到列表
         qDebug() << "[updateSongList] 开始添加歌曲到列表控件";
-        for (const auto& song : songs) {
-            // 调试：检查歌曲ID
-            qDebug() << "[updateSongList] 添加歌曲: ID=" << song.id() 
-                     << ", 标题=" << song.title() 
-                     << ", 艺术家=" << song.artist();
-            
-            QString displayText;
-            if (selectedTag == "最近播放") {
-                // 对于"最近播放"标签，显示播放时间
-                PlayHistoryDao playHistoryDao;
-                QDateTime lastPlayTime = playHistoryDao.getLastPlayTime(song.id());
+        
+        if (selectedTag == "最近播放") {
+            // 对于"最近播放"标签，歌曲列表已经按时间排序，直接使用
+            qDebug() << "[updateSongList] 开始添加最近播放歌曲到UI:";
+            for (int i = 0; i < songs.size(); ++i) {
+                const auto& song = songs[i];
+                qDebug() << QString("[updateSongList] 添加第%1首歌曲: ID=%2, 标题=%3, 艺术家=%4")
+                            .arg(i + 1)
+                            .arg(song.id())
+                            .arg(song.title())
+                            .arg(song.artist());
+                
+                // 从歌曲数据中获取播放时间（如果可用）
+                QString displayText;
+                QDateTime lastPlayTime = song.lastPlayedTime();
                 if (lastPlayTime.isValid()) {
                     // 格式："年/月-日/时-分-秒"
                     QString timeStr = lastPlayTime.toString("yyyy/MM-dd/hh-mm-ss");
                     displayText = QString("%1 - %2  %3").arg(song.artist(), song.title(), timeStr);
+                    qDebug() << QString("[updateSongList] 使用歌曲对象中的时间: %1").arg(timeStr);
                 } else {
-                    displayText = QString("%1 - %2").arg(song.artist(), song.title());
+                    // 如果歌曲数据中没有播放时间，则查询数据库
+                    PlayHistoryDao playHistoryDao;
+                    lastPlayTime = playHistoryDao.getLastPlayTime(song.id());
+                    if (lastPlayTime.isValid()) {
+                        QString timeStr = lastPlayTime.toString("yyyy/MM-dd/hh-mm-ss");
+                        displayText = QString("%1 - %2  %3").arg(song.artist(), song.title(), timeStr);
+                        qDebug() << QString("[updateSongList] 从数据库查询时间: %1").arg(timeStr);
+                    } else {
+                        displayText = QString("%1 - %2").arg(song.artist(), song.title());
+                        qDebug() << "[updateSongList] 无法获取播放时间";
+                    }
                 }
-            } else {
-                displayText = QString("%1 - %2").arg(song.artist(), song.title());
-            }
-            
-            QListWidgetItem* item = new QListWidgetItem();
-            item->setText(displayText);
-            item->setData(Qt::UserRole, QVariant::fromValue(song));
-            item->setToolTip(QString("文件: %1\n时长: %2")
-                           .arg(song.filePath())
-                           .arg(QString::number(song.duration())));
-            
-            // 为"最近播放"标签的歌曲添加特殊标识
-            if (selectedTag == "最近播放") {
+                
+                qDebug() << QString("[updateSongList] 显示文本: %1").arg(displayText);
+                
+                QListWidgetItem* item = new QListWidgetItem();
+                item->setText(displayText);
+                item->setData(Qt::UserRole, QVariant::fromValue(song));
                 item->setData(Qt::UserRole + 1, "recent_play"); // 标识为最近播放项
+                item->setToolTip(QString("文件: %1\n时长: %2")
+                               .arg(song.filePath())
+                               .arg(QString::number(song.duration())));
+                
+                m_songListWidget->addItem(item);
             }
-            
-            m_songListWidget->addItem(item);
+            qDebug() << QString("[updateSongList] 最近播放歌曲添加完成，UI列表共有 %1 项").arg(m_songListWidget->count());
+        } else {
+            // 对于其他标签，正常处理
+            for (const auto& song : songs) {
+                qDebug() << "[updateSongList] 添加歌曲: ID=" << song.id() 
+                         << ", 标题=" << song.title() 
+                         << ", 艺术家=" << song.artist();
+                
+                QString displayText = QString("%1 - %2").arg(song.artist(), song.title());
+                
+                QListWidgetItem* item = new QListWidgetItem();
+                item->setText(displayText);
+                item->setData(Qt::UserRole, QVariant::fromValue(song));
+                item->setToolTip(QString("文件: %1\n时长: %2")
+                               .arg(song.filePath())
+                               .arg(QString::number(song.duration())));
+                
+                m_songListWidget->addItem(item);
+            }
         }
         
         qDebug() << "[updateSongList] 歌曲列表控件现在有" << m_songListWidget->count() << "个项目";
@@ -2558,8 +2744,35 @@ void MainWindowController::handleTagSelectionChange()
             int tagId = tagData.toInt();
             QString tagName = currentItem->text();
             
-            // 更新歌曲列表显示对应标签的歌曲
-            updateSongList();
+            // 检查是否是标签切换
+            bool isTagSwitch = (m_lastActiveTag != tagName);
+            
+            if (isTagSwitch) {
+                // 保存当前播放列表状态
+                if (m_audioEngine && !m_audioEngine->playlist().isEmpty()) {
+                    m_lastPlaylist = m_audioEngine->playlist();
+                    m_shouldKeepPlaylist = true;
+                    logInfo(QString("标签切换，保存播放列表: %1 首歌曲").arg(m_lastPlaylist.size()));
+                }
+                
+                // 场景B触发条件1：用户切换到其他标签并播放歌曲
+                // 如果在"最近播放"标签内有待更新的排序，现在触发更新
+                if (m_needsRecentPlaySortUpdate && m_lastActiveTag == "最近播放") {
+                    logInfo("场景B触发条件1：用户切换到其他标签，触发最近播放排序更新");
+                    m_needsRecentPlaySortUpdate = false;
+                    // 延迟一点时间后重新加载歌曲列表，确保数据库更新完成
+                    QTimer::singleShot(100, [this]() {
+                        updateSongList();
+                        logInfo("最近播放列表已重新排序");
+                    });
+                }
+                
+                // 更新歌曲列表显示对应标签的歌曲
+                updateSongList();
+                
+                // 重置播放列表保持标志（用户切换标签时）
+                m_playlistChangedByUser = false;
+            }
             
             // 更新状态栏
             if (tagId == -1) {
@@ -2576,7 +2789,10 @@ void MainWindowController::handleTagSelectionChange()
                 emit tagSelectionChanged(selectedTag);
             }
             
-            logInfo(QString("标签选择变化: %1 (ID: %2)").arg(tagName).arg(tagId));
+            // 更新最后活跃的标签
+            m_lastActiveTag = tagName;
+            
+            logInfo(QString("标签选择变化: %1 (ID: %2), 标签切换: %3").arg(tagName).arg(tagId).arg(isTagSwitch));
         } else {
             // 没有选中任何标签
             updateStatusBar("未选择标签", 1000);
@@ -3152,12 +3368,12 @@ void MainWindowController::deleteSongFromDatabase(int songId, const QString& son
             db.transaction();
             
             // 先删除歌曲与标签的关联
-            // if (!songDao.removeAllTagsFromSong(songId)) {
-            //     db.rollback();
-            //     logError(QString("删除歌曲标签关联失败: %1").arg(songId));
-            //     QMessageBox::critical(m_mainWindow, "错误", "删除歌曲失败：无法移除标签关联");
-            //     return;
-            // }
+            if (!songDao.removeAllTagsFromSong(songId)) {
+                db.rollback();
+                logError(QString("删除歌曲标签关联失败: %1").arg(songId));
+                QMessageBox::critical(m_mainWindow, "错误", "删除歌曲失败：无法移除标签关联");
+                return;
+            }
             
             // 删除歌曲记录
             if (!songDao.deleteSong(songId)) {
@@ -3543,51 +3759,34 @@ void MainWindowController::deleteSelectedSongsFromDatabase(const QList<QListWidg
         return;
     }
     
-    // 使用QtConcurrent运行删除操作
-    QFuture<void> future = QtConcurrent::run([this, songIds, songTitles]() {
-        qDebug() << "[DeleteSongs] 后台线程开始删除歌曲";
-        int successCount = 0;
-        int failureCount = 0;
-        
-        // 在后台线程中创建数据库连接
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "DeleteSongsThread");
-        db.setDatabaseName(DatabaseManager::instance()->database().databaseName());
-        
-        if (!db.open()) {
-            qDebug() << "[DeleteSongs] 后台线程数据库连接失败:" << db.lastError().text();
-            QMetaObject::invokeMethod(this, "onSongDeletionCompleted", Qt::QueuedConnection,
-                                      Q_ARG(int, 0), Q_ARG(int, songIds.size()));
-            return;
-        }
-        
-        SongDao songDao;
-        for (int i = 0; i < songIds.size(); ++i) {
-            int songId = songIds[i];
-            QString songTitle = songTitles[i];
-            try {
-                qDebug() << "[DeleteSongs] 删除歌曲 ID:" << songId << "标题:" << songTitle;
-                bool deleteResult = songDao.deleteSong(songId);
-                if (deleteResult) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
-            } catch (const std::exception& e) {
-                failureCount++;
-                qDebug() << "[DeleteSongs] 删除歌曲异常:" << e.what();
-            }
-        }
-        
-        // 关闭后台线程的数据库连接
-        db.close();
-        QSqlDatabase::removeDatabase("DeleteSongsThread");
-        
-        // 使用invokeMethod在主线程更新UI
-        QMetaObject::invokeMethod(this, "onSongDeletionCompleted", Qt::QueuedConnection,
-                                  Q_ARG(int, successCount), Q_ARG(int, failureCount));
-    });
+    // 直接在主线程中执行删除操作，避免数据库连接问题
+    qDebug() << "[DeleteSongs] 开始删除歌曲";
+    int successCount = 0;
+    int failureCount = 0;
     
-    updateStatusBar("正在删除歌曲...", 0);
+    SongDao songDao;
+    for (int i = 0; i < songIds.size(); ++i) {
+        int songId = songIds[i];
+        QString songTitle = songTitles[i];
+        
+        try {
+            qDebug() << "[DeleteSongs] 删除歌曲 ID:" << songId << "标题:" << songTitle;
+            bool deleteResult = songDao.deleteSong(songId);
+            if (deleteResult) {
+                successCount++;
+            } else {
+                failureCount++;
+            }
+        } catch (const std::exception& e) {
+            failureCount++;
+            qDebug() << "[DeleteSongs] 删除歌曲异常:" << e.what();
+        }
+    }
+    
+    // 更新UI
+    onSongDeletionCompleted(successCount, failureCount);
+    
+    updateStatusBar("删除歌曲完成", 3000);
 }
 
 // 播放列表操作方法实现
@@ -4207,6 +4406,9 @@ void MainWindowController::onSongDeletionCompleted(int successCount, int failure
         updateSongList();
     }
     
+    // 更新播放列表，移除已删除的歌曲
+    updatePlaylistAfterDeletion();
+    
     QString resultMessage;
     if (failureCount == 0) {
         resultMessage = QString("成功删除 %1 首歌曲").arg(successCount);
@@ -4330,6 +4532,25 @@ void MainWindowController::onDeleteSelectedButtonClicked()
         
         if (reply == QMessageBox::Yes) {
             deleteSelectedPlayHistoryRecordsBySongs(songsToDelete);
+        }
+    } else if (currentTag == "我的歌曲") {
+        // 在"我的歌曲"标签下，只提供彻底删除选项（包括删除实际文件）
+        QString songTitlesText;
+        for (const QString& title : songTitles) {
+            songTitlesText += title + "\n";
+        }
+        
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            m_mainWindow,
+            "确认彻底删除",
+            QString("确定要彻底删除以下歌曲吗？\n\n%1\n注意：这将删除歌曲记录、所有标签关联以及实际文件。此操作不可恢复！")
+                .arg(songTitlesText),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+        
+        if (reply == QMessageBox::Yes) {
+            deleteSelectedSongsCompletelyBySongs(songsToDelete);
         }
     } else if (currentTag == "全部歌曲") {
         // 在"全部歌曲"标签下，提供两种删除选项
@@ -4671,49 +4892,317 @@ void MainWindowController::deleteSelectedSongsFromDatabaseBySongs(const QList<So
         return;
     }
     
-    // 使用QtConcurrent运行删除操作
-    QFuture<void> future = QtConcurrent::run([this, songIds, songTitles]() {
-        qDebug() << "[DeleteSongs] 后台线程开始删除歌曲";
-        int successCount = 0;
-        int failureCount = 0;
+    // 直接在主线程中执行删除操作，避免数据库连接问题
+    qDebug() << "[DeleteSongs] 开始删除歌曲";
+    int successCount = 0;
+    int failureCount = 0;
+    
+    SongDao songDao;
+    for (int i = 0; i < songIds.size(); ++i) {
+        int songId = songIds[i];
+        QString songTitle = songTitles[i];
         
-        // 在后台线程中创建数据库连接
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "DeleteSongsThread");
-        db.setDatabaseName(DatabaseManager::instance()->database().databaseName());
-        
-        if (!db.open()) {
-            qDebug() << "[DeleteSongs] 后台线程数据库连接失败:" << db.lastError().text();
-            QMetaObject::invokeMethod(this, "onSongDeletionCompleted", Qt::QueuedConnection,
-                                      Q_ARG(int, 0), Q_ARG(int, songIds.size()));
-            return;
-        }
-        
-        SongDao songDao;
-        for (int i = 0; i < songIds.size(); ++i) {
-            int songId = songIds[i];
-            QString songTitle = songTitles[i];
-            try {
-                qDebug() << "[DeleteSongs] 删除歌曲 ID:" << songId << "标题:" << songTitle;
-                bool deleteResult = songDao.deleteSong(songId);
-                if (deleteResult) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
-            } catch (const std::exception& e) {
+        try {
+            qDebug() << "[DeleteSongs] 删除歌曲 ID:" << songId << "标题:" << songTitle;
+            bool deleteResult = songDao.deleteSong(songId);
+            if (deleteResult) {
+                successCount++;
+            } else {
                 failureCount++;
-                qDebug() << "[DeleteSongs] 删除歌曲异常:" << e.what();
+            }
+        } catch (const std::exception& e) {
+            failureCount++;
+            qDebug() << "[DeleteSongs] 删除歌曲异常:" << e.what();
+        }
+    }
+    
+    // 更新UI
+    onSongDeletionCompleted(successCount, failureCount);
+    
+    updateStatusBar("删除歌曲完成", 3000);
+}
+
+void MainWindowController::deleteSelectedSongsCompletelyBySongs(const QList<Song>& songs)
+{
+    // 收集歌曲信息
+    QList<int> songIds;
+    QStringList songTitles;
+    QStringList songPaths;
+    
+    for (const Song& song : songs) {
+        if (song.isValid()) {
+            songIds.append(song.id());
+            songTitles.append(song.title());
+            songPaths.append(song.filePath());
+        }
+    }
+    
+    if (songIds.isEmpty()) {
+        logWarning("无法获取选中歌曲的ID信息");
+        QMessageBox::warning(m_mainWindow, "警告", "无法获取选中歌曲的信息");
+        return;
+    }
+    
+    // 检查是否有正在播放的歌曲在删除列表中
+    bool needToStopPlayback = false;
+    Song currentPlayingSong;
+    if (m_audioEngine) {
+        currentPlayingSong = m_audioEngine->currentSong();
+        for (const Song& song : songs) {
+            if (song.id() == currentPlayingSong.id()) {
+                needToStopPlayback = true;
+                qDebug() << "[DeleteSongsCompletely] 检测到正在播放的歌曲将被删除:" << song.title();
+                break;
+            }
+        }
+    }
+    
+    // 如果有正在播放的歌曲将被删除，先停止播放
+    if (needToStopPlayback && m_audioEngine) {
+        qDebug() << "[DeleteSongsCompletely] 停止当前播放以释放文件锁";
+        m_audioEngine->stop();
+        // 等待一小段时间确保文件锁被释放
+        QThread::msleep(100);
+    }
+    
+    // 直接在主线程中执行删除操作，避免数据库连接问题
+    qDebug() << "[DeleteSongsCompletely] 开始彻底删除歌曲";
+    int successCount = 0;
+    int failureCount = 0;
+    QStringList failedFiles;
+    
+    SongDao songDao;
+    for (int i = 0; i < songIds.size(); ++i) {
+        int songId = songIds[i];
+        QString songTitle = songTitles[i];
+        QString songPath = songPaths[i];
+        
+        try {
+            qDebug() << "[DeleteSongsCompletely] 彻底删除歌曲 ID:" << songId 
+                     << "标题:" << songTitle << "路径:" << songPath;
+            
+            bool deleteResult = true;
+            
+            // 1. 先删除实际文件（避免文件被占用的问题）
+            QFileInfo fileInfo(songPath);
+            if (fileInfo.exists()) {
+                QFile file(songPath);
+                if (file.remove()) {
+                    qDebug() << "[DeleteSongsCompletely] 文件删除成功:" << songPath;
+                } else {
+                    qDebug() << "[DeleteSongsCompletely] 文件删除失败:" << songPath 
+                             << "错误:" << file.errorString();
+                    failedFiles.append(songPath);
+                    // 文件删除失败，但继续删除数据库记录
+                }
+            } else {
+                qDebug() << "[DeleteSongsCompletely] 文件不存在:" << songPath;
+            }
+            
+            // 2. 删除数据库记录（包括标签关联）
+            deleteResult = songDao.deleteSong(songId);
+            
+            if (deleteResult) {
+                successCount++;
+                qDebug() << "[DeleteSongsCompletely] 数据库记录删除成功:" << songId;
+            } else {
+                failureCount++;
+                qDebug() << "[DeleteSongsCompletely] 数据库删除失败:" << songId;
+            }
+            
+        } catch (const std::exception& e) {
+            failureCount++;
+            qDebug() << "[DeleteSongsCompletely] 删除歌曲异常:" << e.what();
+        }
+    }
+    
+    // 更新UI
+    onSongDeletionCompleted(successCount, failureCount);
+    
+    // 如果有文件删除失败，显示详细信息
+    if (!failedFiles.isEmpty()) {
+        QString errorMessage = "以下文件删除失败：\n";
+        for (const QString& file : failedFiles) {
+            errorMessage += file + "\n";
+        }
+        QMessageBox::warning(m_mainWindow, "文件删除失败", errorMessage);
+    }
+    
+    updateStatusBar("彻底删除歌曲完成", 3000);
+}
+
+void MainWindowController::updatePlaylistAfterDeletion()
+{
+    qDebug() << "[updatePlaylistAfterDeletion] 开始更新播放列表";
+    
+    if (!m_audioEngine) {
+        qDebug() << "[updatePlaylistAfterDeletion] AudioEngine未初始化";
+        return;
+    }
+    
+    // 获取当前播放列表和当前歌曲
+    QList<Song> currentPlaylist = m_audioEngine->playlist();
+    Song currentSong = m_audioEngine->currentSong();
+    int currentIndex = m_audioEngine->currentIndex();
+    
+    qDebug() << "[updatePlaylistAfterDeletion] 当前播放列表大小:" << currentPlaylist.size();
+    qDebug() << "[updatePlaylistAfterDeletion] 当前歌曲索引:" << currentIndex;
+    qDebug() << "[updatePlaylistAfterDeletion] 当前歌曲:" << (currentSong.isValid() ? currentSong.title() : "无");
+    
+    // 检查当前播放列表是否为空
+    if (currentPlaylist.isEmpty()) {
+        qDebug() << "[updatePlaylistAfterDeletion] 播放列表为空，重置播放器状态";
+        resetPlayerToEmptyState();
+        return;
+    }
+    
+    // 检查当前播放的歌曲是否仍然存在于数据库中
+    bool currentSongStillExists = false;
+    if (currentSong.isValid()) {
+        SongDao songDao;
+        Song existingSong = songDao.getSongById(currentSong.id());
+        currentSongStillExists = existingSong.isValid();
+        qDebug() << "[updatePlaylistAfterDeletion] 当前歌曲是否仍存在:" << currentSongStillExists;
+    }
+    
+    // 如果当前播放的歌曲已被删除
+    if (!currentSongStillExists && currentSong.isValid()) {
+        qDebug() << "[updatePlaylistAfterDeletion] 当前播放的歌曲已被删除，停止播放";
+        
+        // 停止当前播放
+        m_audioEngine->stop();
+        
+        // 从播放列表中移除已删除的歌曲
+        QList<Song> updatedPlaylist;
+        for (const Song& song : currentPlaylist) {
+            SongDao songDao;
+            Song existingSong = songDao.getSongById(song.id());
+            if (existingSong.isValid()) {
+                updatedPlaylist.append(song);
+            } else {
+                qDebug() << "[updatePlaylistAfterDeletion] 从播放列表中移除已删除的歌曲:" << song.title();
             }
         }
         
-        // 关闭后台线程的数据库连接
-        db.close();
-        QSqlDatabase::removeDatabase("DeleteSongsThread");
+        // 更新播放列表
+        if (!updatedPlaylist.isEmpty()) {
+            qDebug() << "[updatePlaylistAfterDeletion] 更新播放列表，剩余歌曲数量:" << updatedPlaylist.size();
+            m_audioEngine->setPlaylist(updatedPlaylist);
+            
+            // 自动播放第一首歌曲
+            m_audioEngine->setCurrentIndex(0);
+            m_audioEngine->play();
+            qDebug() << "[updatePlaylistAfterDeletion] 自动播放第一首歌曲:" << updatedPlaylist.first().title();
+        } else {
+            qDebug() << "[updatePlaylistAfterDeletion] 播放列表为空，重置播放器状态";
+            resetPlayerToEmptyState();
+        }
+    } else {
+        // 当前歌曲仍然存在，但需要检查播放列表中是否有其他歌曲被删除
+        QList<Song> updatedPlaylist;
+        for (const Song& song : currentPlaylist) {
+            SongDao songDao;
+            Song existingSong = songDao.getSongById(song.id());
+            if (existingSong.isValid()) {
+                updatedPlaylist.append(song);
+            } else {
+                qDebug() << "[updatePlaylistAfterDeletion] 从播放列表中移除已删除的歌曲:" << song.title();
+            }
+        }
         
-        // 使用invokeMethod在主线程更新UI
-        QMetaObject::invokeMethod(this, "onSongDeletionCompleted", Qt::QueuedConnection,
-                                  Q_ARG(int, successCount), Q_ARG(int, failureCount));
-    });
+        // 如果播放列表有变化，更新播放列表
+        if (updatedPlaylist.size() != currentPlaylist.size()) {
+            qDebug() << "[updatePlaylistAfterDeletion] 播放列表有变化，更新播放列表";
+            qDebug() << "[updatePlaylistAfterDeletion] 原播放列表大小:" << currentPlaylist.size() 
+                     << "，新播放列表大小:" << updatedPlaylist.size();
+            
+            if (!updatedPlaylist.isEmpty()) {
+                // 找到当前歌曲在新播放列表中的位置
+                int newIndex = -1;
+                for (int i = 0; i < updatedPlaylist.size(); ++i) {
+                    if (updatedPlaylist[i].id() == currentSong.id()) {
+                        newIndex = i;
+                        break;
+                    }
+                }
+                
+                if (newIndex >= 0) {
+                    m_audioEngine->setPlaylist(updatedPlaylist);
+                    m_audioEngine->setCurrentIndex(newIndex);
+                    qDebug() << "[updatePlaylistAfterDeletion] 更新播放列表，当前歌曲新索引:" << newIndex;
+                } else {
+                    // 当前歌曲不在新播放列表中，播放第一首
+                    m_audioEngine->setPlaylist(updatedPlaylist);
+                    m_audioEngine->setCurrentIndex(0);
+                    m_audioEngine->play();
+                    qDebug() << "[updatePlaylistAfterDeletion] 当前歌曲不在新播放列表中，播放第一首";
+                }
+            } else {
+                qDebug() << "[updatePlaylistAfterDeletion] 更新后的播放列表为空，重置播放器状态";
+                resetPlayerToEmptyState();
+            }
+        } else {
+            qDebug() << "[updatePlaylistAfterDeletion] 播放列表无变化";
+        }
+    }
     
-    updateStatusBar("正在删除歌曲...", 0);
+    qDebug() << "[updatePlaylistAfterDeletion] 播放列表更新完成";
+}
+
+void MainWindowController::resetPlayerToEmptyState()
+{
+    qDebug() << "[resetPlayerToEmptyState] 重置播放器到空状态";
+    
+    if (!m_audioEngine) {
+        qDebug() << "[resetPlayerToEmptyState] AudioEngine未初始化";
+        return;
+    }
+    
+    // 停止播放
+    m_audioEngine->stop();
+    
+    // 清空播放列表
+    m_audioEngine->setPlaylist(QList<Song>());
+    
+    // 重置当前索引
+    m_audioEngine->setCurrentIndex(-1);
+    
+    // 更新UI状态
+    updatePlayButtonUI(false);
+    updateCurrentSongInfo();
+    
+    // 清除播放进度
+    if (m_musicProgressBar) {
+        m_musicProgressBar->setPosition(0);
+        m_musicProgressBar->setDuration(0);
+    }
+    
+    // 更新状态栏
+    updateStatusBar("播放列表为空", 3000);
+    
+    qDebug() << "[resetPlayerToEmptyState] 播放器已重置到空状态";
+}
+
+void MainWindowController::triggerRecentPlaySortUpdate()
+{
+    qDebug() << "[triggerRecentPlaySortUpdate] 触发最近播放排序更新";
+    
+    // 检查是否在"最近播放"标签下
+    QString currentTag = "";
+    if (m_tagListWidget && m_tagListWidget->currentItem()) {
+        currentTag = m_tagListWidget->currentItem()->text();
+    }
+    
+    if (currentTag == "最近播放" && m_needsRecentPlaySortUpdate) {
+        logInfo("手动触发最近播放排序更新");
+        m_needsRecentPlaySortUpdate = false;
+        
+        // 延迟一点时间后重新加载歌曲列表，确保数据库更新完成
+        QTimer::singleShot(100, [this]() {
+            updateSongList();
+            logInfo("最近播放列表已重新排序");
+        });
+    } else {
+        logInfo("当前不在最近播放标签下或无需更新排序");
+    }
 }

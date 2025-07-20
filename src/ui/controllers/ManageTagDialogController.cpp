@@ -1433,6 +1433,18 @@ void ManageTagDialogController::transferSongs(const QString& fromTag, const QStr
             loadSongs();
             updateSongList();
             
+            // 通知主界面刷新歌曲列表（特别是移动转移后）
+            if (!copy) {
+                // 移动转移后，需要通知主界面刷新当前标签的歌曲列表
+                emit uiRefreshed();
+                
+                // 如果主界面有控制器，也通知它刷新
+                if (m_dialog) {
+                    // 发送信号通知主界面需要刷新
+                    emit dialogAccepted();
+                }
+            }
+            
             // 显示成功消息
             if (failureCount == 0) {
                 QMessageBox::information(m_dialog, "操作成功", 

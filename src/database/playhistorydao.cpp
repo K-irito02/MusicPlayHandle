@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QSqlError>
 #include <QDateTime>
+#include <QSqlRecord>
 
 PlayHistoryDao::PlayHistoryDao(QObject* parent)
     : BaseDao(parent)
@@ -50,7 +51,7 @@ QList<Song> PlayHistoryDao::getRecentPlayedSongs(int limit)
 {
     QMutexLocker locker(&m_mutex);
     
-    // 修改SQL查询，确保每首歌只显示最新的播放记录
+    // 使用优化的SQL查询，确保每首歌只显示最新的播放记录
     const QString sql = R"(
         SELECT s.id, s.title, s.artist, s.album, s.file_path, s.duration,
                s.file_size, s.date_added, s.last_played, s.play_count, s.rating,
@@ -70,13 +71,56 @@ QList<Song> PlayHistoryDao::getRecentPlayedSongs(int limit)
     query.addBindValue(limit);
     
     QList<Song> songs;
+    
     if (query.exec()) {
+        qDebug() << "[PlayHistoryDao::getRecentPlayedSongs] SQL查询执行成功";
+        qDebug() << "[PlayHistoryDao::getRecentPlayedSongs] 查询结果:";
+        
         while (query.next()) {
+            // 调试：打印原始查询结果
+            QDateTime playedAt = query.value("played_at").toDateTime();
+            QString title = query.value("title").toString();
+            QString artist = query.value("artist").toString();
+            int songId = query.value("id").toInt();
+            
+            qDebug() << QString("  [DB] ID=%1, %2 - %3  %4")
+                        .arg(songId)
+                        .arg(artist)
+                        .arg(title)
+                        .arg(playedAt.toString("yyyy/MM-dd/hh-mm-ss"));
+            
             Song song = createSongFromQuery(query);
+            
+            // 调试：打印创建后的歌曲对象
+            qDebug() << QString("  [Song] %1 - %2  %3")
+                        .arg(song.artist())
+                        .arg(song.title())
+                        .arg(song.lastPlayedTime().toString("yyyy/MM-dd/hh-mm-ss"));
+            
             songs.append(song);
+            
+            // 如果已经达到限制，停止处理
+            if (songs.size() >= limit) {
+                break;
+            }
         }
+        
+        qDebug() << QString("[PlayHistoryDao::getRecentPlayedSongs] 最终返回 %1 首歌曲").arg(songs.size());
+        
+        // 验证排序
+        for (int i = 0; i < songs.size() - 1; ++i) {
+            QDateTime currentTime = songs[i].lastPlayedTime();
+            QDateTime nextTime = songs[i + 1].lastPlayedTime();
+            if (currentTime < nextTime) {
+                qDebug() << QString("[PlayHistoryDao::getRecentPlayedSongs] 警告：排序错误！第%1首(%2)时间早于第%3首(%4)")
+                            .arg(i + 1).arg(currentTime.toString("hh:mm:ss"))
+                            .arg(i + 2).arg(nextTime.toString("hh:mm:ss"));
+            }
+        }
+        
         logInfo("getRecentPlayedSongs", QString("获取到 %1 首最近播放歌曲").arg(songs.size()));
     } else {
+        qDebug() << "[PlayHistoryDao::getRecentPlayedSongs] SQL查询失败:" << query.lastError().text();
         logError("getRecentPlayedSongs", query.lastError().text());
     }
     
@@ -353,7 +397,19 @@ Song PlayHistoryDao::createSongFromQuery(const QSqlQuery& query)
     song.setDuration(query.value("duration").toLongLong());
     song.setFileSize(query.value("file_size").toLongLong());
     song.setDateAdded(query.value("date_added").toDateTime());
-    song.setLastPlayedTime(query.value("last_played").toDateTime());
+    
+    // 对于最近播放查询，使用play_history表的played_at字段
+    // 对于其他查询，使用songs表的last_played字段
+    QDateTime lastPlayedTime;
+    if (query.record().indexOf("played_at") >= 0) {
+        // 如果查询结果包含played_at字段（来自play_history表），使用它
+        lastPlayedTime = query.value("played_at").toDateTime();
+    } else {
+        // 否则使用songs表的last_played字段
+        lastPlayedTime = query.value("last_played").toDateTime();
+    }
+    song.setLastPlayedTime(lastPlayedTime);
+    
     song.setPlayCount(query.value("play_count").toInt());
     song.setRating(query.value("rating").toInt());
     song.setCreatedAt(query.value("created_at").toDateTime());
@@ -417,4 +473,4 @@ bool PlayHistoryDao::limitPlayHistoryRecords(int maxRecords)
         logError("limitPlayHistoryRecords", query.lastError().text());
         return false;
     }
-} 
+}

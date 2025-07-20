@@ -17,7 +17,7 @@
 AudioEngine* AudioEngine::m_instance = nullptr;
 QMutex AudioEngine::m_instanceMutex;
 QStringList AudioEngine::m_supportedFormats = {
-    "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "opus"
+    "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "opus", "mp4", "ape", "aiff"
 };
 
 AudioEngine::AudioEngine(QObject* parent)
@@ -446,8 +446,18 @@ void AudioEngine::stop()
     }
     
     try {
-        // 停止播放
-        m_audioWorker->stopAudio();
+        // 直接停止QMediaPlayer，确保立即释放文件锁
+        if (m_player) {
+            m_player->stop();
+            qDebug() << "[AudioEngine::stop] QMediaPlayer已停止";
+        }
+        
+        // 同时通知工作线程停止（如果存在）
+        if (m_audioWorker) {
+            m_audioWorker->stopAudio();
+            qDebug() << "[AudioEngine::stop] 工作线程停止命令已发送";
+        }
+        
         m_state = AudioTypes::AudioState::Paused; // 改为暂停状态而不是停止状态
         emit stateChanged(m_state);
         
@@ -467,7 +477,7 @@ void AudioEngine::stop()
         emit positionChanged(0);
         emit durationChanged(0);
         
-        qDebug() << "[AudioEngine::stop] 已委托工作线程停止播放";
+        qDebug() << "[AudioEngine::stop] 停止播放完成";
     } catch (const std::exception& e) {
         logError(QString("停止失败: %1").arg(e.what()));
         qDebug() << "[AudioEngine::stop] 捕获到异常:" << e.what();
@@ -605,7 +615,8 @@ void AudioEngine::setPlaylist(const QList<Song>& songs)
         if (isFormatSupported(song.filePath())) {
             validSongs.append(song);
         } else {
-            logError(QString("不支持的音频格式: %1").arg(song.filePath()));
+            QString extension = QFileInfo(song.filePath()).suffix().toLower();
+            logError(QString("不支持的音频格式: %1 (扩展名: %2)").arg(song.filePath()).arg(extension));
         }
     }
     
@@ -615,8 +626,9 @@ void AudioEngine::setPlaylist(const QList<Song>& songs)
     {
         QMutexLocker locker(&m_mutex);
         m_playlist = validSongs;
-        m_currentIndex = validSongs.isEmpty() ? -1 : 0;
-        qDebug() << "[AudioEngine::setPlaylist] 设置当前索引:" << m_currentIndex;
+        // 不自动设置当前索引，避免触发不必要的currentSongChanged信号
+        m_currentIndex = -1;  // 重置为-1，等待后续手动设置
+        qDebug() << "[AudioEngine::setPlaylist] 重置当前索引为-1，等待手动设置";
     }
     
     logPlaybackEvent("设置播放列表", QString("歌曲数量: %1").arg(validSongs.size()));
@@ -624,12 +636,8 @@ void AudioEngine::setPlaylist(const QList<Song>& songs)
     qDebug() << "[AudioEngine::setPlaylist] 发出播放列表变化信号";
     emit playlistChanged(m_playlist);
     
-    if (m_currentIndex >= 0) {
-        qDebug() << "[AudioEngine::setPlaylist] 发出当前索引变化信号:" << m_currentIndex;
-        emit currentIndexChanged(m_currentIndex);
-        qDebug() << "[AudioEngine::setPlaylist] 发出当前歌曲变化信号";
-        emit currentSongChanged(m_playlist[m_currentIndex]);
-    }
+    // 不自动发出currentSongChanged信号，避免错误更新播放记录
+    qDebug() << "[AudioEngine::setPlaylist] 播放列表设置完成，等待手动设置当前歌曲";
     
     qDebug() << "[AudioEngine::setPlaylist] 播放列表设置完成";
 }
