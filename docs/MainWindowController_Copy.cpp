@@ -231,13 +231,15 @@ void MainWindowController::onActionManageTag()
 void MainWindowController::onActionPlayInterface()
 {
     logInfo("播放界面请求");
-    emit playInterfaceRequested();
+    // 移除这行，避免循环调用
+    // emit playInterfaceRequested();
 }
 
 void MainWindowController::onActionSettings()
 {
     logInfo("设置请求");
-    emit settingsRequested();
+    // 移除这行，避免循环调用
+    // emit settingsRequested();
 }
 
 void MainWindowController::onActionAbout()

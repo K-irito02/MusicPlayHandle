@@ -1,37 +1,32 @@
 #ifndef PLAYINTERFACE_H
 #define PLAYINTERFACE_H
 
-#include <QWidget>
-#include <QSlider>
-#include <QLabel>
-#include <QPushButton>
-#include <QProgressBar>
-#include <QFrame>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+#include <QDialog>
 #include <QTimer>
-#include <QPixmap>
 #include <QGraphicsView>
 #include <QGraphicsScene>
-#include <QGraphicsItem>
+#include <QVector>
+#include <QPixmap>
+#include <QHBoxLayout>
+#include "../../audio/audiotypes.h"
 
-QT_BEGIN_NAMESPACE
 namespace Ui {
 class PlayInterface;
 }
-QT_END_NAMESPACE
 
 class PlayInterfaceController;
+class MusicProgressBar;
+class AudioEngine;
 
-class PlayInterface : public QWidget
+class PlayInterface : public QDialog
 {
     Q_OBJECT
 
 public:
-    PlayInterface(QWidget *parent = nullptr);
+    explicit PlayInterface(QWidget *parent = nullptr);
     ~PlayInterface();
 
-    // 播放控制
+    // 播放状态控制
     void setPlaybackState(bool isPlaying);
     void setCurrentTime(qint64 time);
     void setTotalTime(qint64 time);
@@ -39,29 +34,46 @@ public:
     void setBalance(int balance);
     void setMuted(bool muted);
     
-    // 歌曲信息
+    // 歌曲信息显示
     void setSongTitle(const QString& title);
     void setSongArtist(const QString& artist);
     void setSongAlbum(const QString& album);
     void setSongCover(const QPixmap& cover);
     void setLyrics(const QString& lyrics);
     
-    // 可视化
+    // 进度条控制
+    void setProgressBarPosition(qint64 position);
+    void setProgressBarDuration(qint64 duration);
+    void updateProgressDisplay();
+    
+    // 音量控制
+    void updateVolumeControls();
+    void setVolumeSliderValue(int value);
+    void updateVolumeLabel(int value);
+    void updateMuteButtonIcon();
+    
+    // 播放模式和显示控制
+    void updatePlayModeButton(const QString& text, const QString& iconPath, const QString& tooltip);
+    void setDisplayMode(int mode);
+    void updatePlayModeDisplay(AudioTypes::PlayMode mode); // 新增：播放模式显示更新
+    
+    // 可视化相关
     void updateWaveform(const QVector<float>& data);
     void updateSpectrum(const QVector<float>& data);
     void updateVUMeter(float leftLevel, float rightLevel);
     
-    // 显示模式
-    void setDisplayMode(int mode); // 0: 歌词, 1: 封面, 2: 可视化
-    
-    // 均衡器
+    // 均衡器相关
     void setEqualizerValues(const QVector<int>& values);
     QVector<int> getEqualizerValues() const;
     
-    // 播放模式相关
-    void updatePlayModeButton(const QString& text, const QString& iconPath, const QString& tooltip);
-
+    // 状态查询
     bool isMuted() const { return m_isMuted; }
+    
+    // 控制器访问
+    PlayInterfaceController* getController() const { return m_controller; }
+    
+    // AudioEngine设置 - 新增
+    void setAudioEngine(AudioEngine* audioEngine);
 
 signals:
     void playPauseClicked();
@@ -72,8 +84,17 @@ signals:
     void balanceChanged(int balance);
     void positionChanged(qint64 position);
     void muteToggled(bool muted);
+    void displayModeClicked();
+    void visualizationTypeClicked();
     void equalizerChanged(const QVector<int>& values);
-    void displayModeChanged(int mode);
+    void lyricClicked(qint64 timestamp);
+    
+    // 进度条和音量控制信号
+    void seekRequested(qint64 position);
+    void progressSliderPressed();
+    void progressSliderReleased();
+    void volumeSliderChanged(int value);
+    void muteButtonClicked();
 
 private slots:
     void onPlayPauseClicked();
@@ -84,20 +105,50 @@ private slots:
     void onBalanceSliderChanged(int value);
     void onPositionSliderChanged(int value);
     void onMuteButtonClicked();
-    void onEqualizerSliderChanged(int value);
-    void onDisplayModeChanged();
+    void onDisplayModeClicked();
+    void onVisualizationTypeClicked();
+    void onEqualizerSliderChanged();
+    void onLyricClicked(qint64 timestamp);
     void onUpdateTimer();
+    
+    // 进度条和音量控制槽函数
+    void onProgressSliderPressed();
+    void onProgressSliderReleased();
+    void onProgressSliderMoved(int value);
+    void onVolumeSliderValueChanged(int value);
+    void onMuteButtonPressed();
+
+private:
+    void setupConnections();
+    void setupUI();
+    void setupVisualization();
+    void setupProgressBar(); // 新增：设置自定义进度条
+    void updatePlaybackControls();
+    void updateTimeDisplay();
+    void updateVolumeDisplay();
+    void updateMuteButtonState();
+    void updateDisplayMode();
+    void updateVisualization();
+    void updateEqualizerDisplay();
+    void updateLyricDisplay();
+    QString formatTime(qint64 milliseconds) const;
 
 private:
     Ui::PlayInterface *ui;
-    PlayInterfaceController* m_controller;
+    PlayInterfaceController *m_controller;
+    QTimer *m_updateTimer;
     
-    QTimer* m_updateTimer;
-    QGraphicsView* m_waveformView;
-    QGraphicsView* m_spectrumView;
-    QGraphicsScene* m_waveformScene;
-    QGraphicsScene* m_spectrumScene;
+    // 自定义进度条组件 - 新增
+    MusicProgressBar* m_customProgressBar;
+    AudioEngine* m_audioEngine; // 新增：AudioEngine引用
     
+    // 可视化组件
+    QGraphicsView *m_waveformView;
+    QGraphicsView *m_spectrumView;
+    QGraphicsScene *m_waveformScene;
+    QGraphicsScene *m_spectrumScene;
+    
+    // 播放状态
     bool m_isPlaying;
     qint64 m_currentTime;
     qint64 m_totalTime;
@@ -106,16 +157,11 @@ private:
     bool m_isMuted;
     int m_displayMode;
     
-    void setupConnections();
-    void setupUI();
-    void setupVisualization();
-    void updateTimeDisplay();
-    void updateVolumeDisplay();
-    void updatePlaybackControls();
-    void drawWaveform(const QVector<float>& data);
-    void drawSpectrum(const QVector<float>& data);
-    void drawVUMeter(float leftLevel, float rightLevel);
-    QString formatTime(qint64 milliseconds) const;
+    // 均衡器值
+    QVector<int> m_equalizerValues;
+    
+    // 歌词相关
+    int m_currentLyricIndex;
 };
 
 #endif // PLAYINTERFACE_H

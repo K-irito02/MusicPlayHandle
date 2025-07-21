@@ -3,6 +3,16 @@
 #include <QDebug>
 #include <QCoreApplication>
 
+// 实现logError函数
+void AudioWorkerThread::logError(const QString& message) {
+    Logger::instance()->error(message, "AudioWorker");
+}
+
+// 实现logInfo函数
+void AudioWorkerThread::logInfo(const QString& message) {
+    Logger::instance()->info(message, "AudioWorker");
+}
+
 // 注册枚举类型到 Qt 元对象系统
 Q_DECLARE_METATYPE(AudioWorkerThread::ThreadState)
 
@@ -21,7 +31,6 @@ void AudioEffectProcessor::setEqualizerBands(const QVector<double>& bands) { m_e
 QByteArray AudioEffectProcessor::processAudio(const QByteArray& input) {
     QByteArray output = input;
     // 应用音效（这里简化，实际需实现DSP）
-    qDebug() << "[AudioEffect] Processing audio data, size:" << input.size();
     return output;
 }
 
@@ -61,8 +70,6 @@ AudioWorkerThread::AudioWorkerThread(QObject* parent) : QThread(parent),
     QTimer* bufferTimer = new QTimer(this);
     connect(bufferTimer, &QTimer::timeout, this, &AudioWorkerThread::updateBufferStatus, Qt::QueuedConnection);
     bufferTimer->start(100); // 每100ms更新一次
-
-    qDebug() << "[AudioWorker] Thread and media components initialized";
 }
 
 AudioWorkerThread::~AudioWorkerThread() {
@@ -89,8 +96,6 @@ AudioWorkerThread::~AudioWorkerThread() {
         delete m_audioBuffer;
         m_audioBuffer = nullptr;
     }
-
-    qDebug() << "[AudioWorker] Thread and media components destroyed";
 }
 
 void AudioWorkerThread::startThread() {
@@ -100,9 +105,6 @@ void AudioWorkerThread::startThread() {
         m_shouldStop = false;
         m_threadState = ThreadState::Running;
         start();
-        qDebug() << "[AudioWorker] Thread started";
-    } else {
-        qDebug() << "[AudioWorker] Thread already running";
     }
 }
 
@@ -116,16 +118,13 @@ void AudioWorkerThread::stopThread() {
 
         // 等待线程结束
         if (!wait(5000)) { // 等待最多5秒
-            qWarning() << "[AudioWorker] Thread did not stop gracefully, forcing termination";
+            logError("[AudioWorker] Thread did not stop gracefully, forcing termination");
             terminate();
             wait();
         }
 
         m_running = false;
         m_threadState = ThreadState::Stopped;
-        qDebug() << "[AudioWorker] Thread stopped";
-    } else {
-        qDebug() << "[AudioWorker] Thread already stopped";
     }
 }
 
@@ -146,7 +145,6 @@ void AudioWorkerThread::setEqualizerSettings(bool enabled, const QVector<double>
     cmd.boolParam = enabled;
     cmd.variantParam = QVariant::fromValue(bands);
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued equalizer settings command, enabled:" << enabled;
 }
 
 void AudioWorkerThread::setReverbSettings(bool enabled, double intensity) {
@@ -154,35 +152,30 @@ void AudioWorkerThread::setReverbSettings(bool enabled, double intensity) {
     cmd.boolParam = enabled;
     cmd.variantParam = intensity;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued reverb settings command, enabled:" << enabled << "intensity:" << intensity;
 }
 
 void AudioWorkerThread::setBalanceSettings(double balance) {
     AudioCommand cmd(AudioCommandType::ApplyEffects);
     cmd.variantParam = balance;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued balance settings command, balance:" << balance;
 }
 
 void AudioWorkerThread::setCrossfadeSettings(int duration) {
     AudioCommand cmd(AudioCommandType::ApplyEffects);
     cmd.intParam = duration;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued crossfade settings command, duration:" << duration;
 }
 
 void AudioWorkerThread::preloadMedia(const QString& filePath) {
     AudioCommand cmd(AudioCommandType::LoadMedia);
     cmd.stringParam = filePath;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued media preload command for file:" << filePath;
 }
 
 void AudioWorkerThread::preloadMediaBatch(const QStringList& filePaths) {
     for (const QString& filePath : filePaths) {
         preloadMedia(filePath);
     }
-    qDebug() << "[AudioWorker] Enqueued batch media preload command for" << filePaths.size() << "files";
 }
 
 void AudioWorkerThread::setBufferSize(int size) {
@@ -192,7 +185,6 @@ void AudioWorkerThread::setBufferSize(int size) {
         if (m_audioBuffer) {
             QByteArray* buffer = new QByteArray(size, 0);
             m_audioBuffer->setBuffer(buffer);
-            qDebug() << "[AudioWorker] Buffer size set to:" << size << "bytes";
         }
     }
 }
@@ -206,60 +198,50 @@ void AudioWorkerThread::playAudio(const QString& filePath) {
     AudioCommand cmd(AudioCommandType::Play);
     cmd.stringParam = filePath;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued play command for file:" << filePath;
 }
 
 void AudioWorkerThread::pauseAudio() {
     AudioCommand cmd(AudioCommandType::Pause);
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued pause command";
 }
 
 void AudioWorkerThread::resumeAudio() {
     AudioCommand cmd(AudioCommandType::Play);
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued resume command";
 }
 
 void AudioWorkerThread::stopAudio() {
     AudioCommand cmd(AudioCommandType::Stop);
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued stop command";
 }
 
 void AudioWorkerThread::seekAudio(qint64 position) {
-    qDebug() << "[AudioWorker] 开始执行seekAudio，位置:" << position << "ms";
     AudioCommand cmd(AudioCommandType::Seek);
     cmd.int64Param = position;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] seek命令已入队，位置:" << position << "ms";
 }
 
 void AudioWorkerThread::setVolume(int volume) {
     AudioCommand cmd(AudioCommandType::SetVolume);
     cmd.intParam = volume;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued set volume command:" << volume;
 }
 
 void AudioWorkerThread::setMuted(bool muted) {
     AudioCommand cmd(AudioCommandType::SetMuted);
     cmd.boolParam = muted;
     enqueueCommand(cmd);
-    qDebug() << "[AudioWorker] Enqueued set muted command:" << muted;
 }
 
 void AudioWorkerThread::enqueueCommand(const AudioCommand& cmd) {
     QMutexLocker locker(&m_mutex);
     m_commandQueue.enqueue(cmd);
     m_commandQueueCondition.wakeOne();
-    qDebug() << "[AudioWorker] Command enqueued, type:" << static_cast<int>(cmd.type);
 }
 
 
 
 void AudioWorkerThread::run() {
-    qDebug() << "[AudioWorker] Thread started running";
     emit threadStateChanged(ThreadState::Running);
 
     while (!m_shouldStop) {
@@ -275,7 +257,6 @@ void AudioWorkerThread::run() {
         handleAudioCommand(cmd);
     }
 
-    qDebug() << "[AudioWorker] Thread stopped running";
     emit threadStateChanged(ThreadState::Stopped);
 }
 
@@ -299,9 +280,7 @@ void AudioWorkerThread::handleAudioCommand(const AudioCommand& command) {
             break;
 
         case AudioCommandType::Seek:
-            qDebug() << "[AudioWorker] 执行seek命令，位置:" << command.int64Param << "ms";
             m_mediaPlayer->setPosition(command.int64Param);
-            qDebug() << "[AudioWorker] seek命令执行完成";
             break;
 
         case AudioCommandType::SetVolume:
@@ -327,7 +306,7 @@ void AudioWorkerThread::handleAudioCommand(const AudioCommand& command) {
             break;
 
         default:
-            qWarning() << "[AudioWorker] Unknown command type:" << static_cast<int>(command.type);
+            logError(QString("[AudioWorker] Unknown command type: %1").arg(static_cast<int>(command.type)));
             break;
     }
 }
@@ -357,7 +336,7 @@ void AudioWorkerThread::handleMediaPlayerError(QMediaPlayer::Error error) {
     emit audioError(errorMessage);
     m_threadState = ThreadState::Error;
     emit threadStateChanged(m_threadState);
-    qWarning() << "[AudioWorker] Media player error:" << errorMessage;
+    logError(QString("[AudioWorker] Media player error: %1").arg(errorMessage));
 }
 
 void AudioWorkerThread::handleAudioOutputError() {
@@ -365,7 +344,7 @@ void AudioWorkerThread::handleAudioOutputError() {
     emit audioError(errorMessage);
     m_threadState = ThreadState::Error;
     emit threadStateChanged(m_threadState);
-    qWarning() << "[AudioWorker] Audio output error:" << errorMessage;
+    logError(QString("[AudioWorker] Audio output error: %1").arg(errorMessage));
 }
 
 void AudioWorkerThread::updateBufferStatus() {
@@ -413,7 +392,7 @@ void AudioWorkerThread::preloadAudioFile(const QString& filePath) {
         
     } catch (const std::exception& e) {
         emit preloadError(filePath, QString::fromUtf8(e.what()));
-        qWarning() << "[AudioWorker] Preload error for file:" << filePath << ", error:" << e.what();
+        logError(QString("[AudioWorker] Preload error for file: %1, error: %2").arg(filePath).arg(e.what()));
     }
 }
 

@@ -5,7 +5,7 @@
 ### 🔗 **项目信息**
 
 - **名称**: Qt6音频播放器 (`MusicPlayHandle`)
-- **版本**: 0.1.1 (主版本.次版本.补丁)
+- **版本**: 0.2.1 (主版本.次版本.补丁)
 - **组织**: Qt6音频播放器开发团队
 - **域名**: musicPlayHandle.qt6.org
 - **描述**: Modern Qt6 Music Player with Advanced Tag Management
@@ -13,9 +13,9 @@
 - **Qt版本**: Qt6.5.3+ (MinGW 64-bit)
 - **语言标准**: C++17
 - **开发环境**: Qt Creator 11.0.0+
-- **最后更新**: 2025年07月20日 (`最近播放`标签及功能优化)
-- **主要功能**: 音频播放、标签管理、播放历史、精确进度控制
-- **特色技术**: PreciseSlider、多线程音频处理、播放历史管理、UI控件冲突解决
+- **最后更新**: 2025年07月21日 (界面同步优化)
+- **主要功能**: 音频播放、标签管理、播放历史、精确进度控制、界面同步
+- **特色技术**: PreciseSlider、多线程音频处理、播放历史管理、UI控件冲突解决、界面同步机制
 
 ### 🏗️ **项目架构**
 
@@ -101,7 +101,7 @@
 ### 📂 **项目文件结构**
 ```
 MusicPlayHandle/
-├── .clang-format             # 代码格式化配置
+├── .clang-format            # 代码格式化配置
 ├── .gitignore               # Git忽略文件配置
 ├── musicPlayHandle.pro      # qmake项目文件 (主要)
 ├── musicPlayHandle.pro.user # Qt Creator用户配置
@@ -110,37 +110,7 @@ MusicPlayHandle/
 ├── main.cpp                 # 程序入口
 ├── mainwindow.h/cpp         # 主窗口实现
 ├── MainWindowController_Copy.h/cpp  # 主窗口控制器备份
-├── docs/                    # 项目文档
-│   ├── 最近播放排序问题最终修复.md  # 最近播放排序问题最终修复
-│   ├── 最近播放功能实现总结.md      # 最近播放功能实现
-│   ├── 最近播放功能问题修复总结.md  # 最近播放问题修复
-│   ├── 删除功能增强与问题修复总结.md # 删除功能增强
-│   ├── 拖拽与点击进度条-最终解决及优化方案.md  # 进度条优化方案
-│   ├── PRECISE_SLIDER_FIX_GUIDE.md  # 精确滑块修复指南
-│   ├── PROGRESS_BAR_MIXED_SOLUTION.md # 进度条混合方案
-│   ├── 播放与暂停不可控问题.md      # 播放控制问题解决
-│   ├── PROJECT_OPTIMIZATION_SUMMARY.md # 项目优化总结
-│   ├── OPTIMIZATION_GUIDE.md        # 详细优化指南
-│   ├── GITHUB_UPLOAD_GUIDE.md      # GitHub上传指南
-│   ├── REFACTORING_GUIDE.md        # 重构指南
-│   ├── 重构主界面控制器方案.md      # 主界面控制器重构
-│   ├── 播放列表为空时按钮行为修复.md # 播放列表按钮修复
-│   ├── 管理与编辑音乐标签-导致进程崩溃问题.md # 标签管理崩溃修复
-│   ├── ADD_SONG_TAG_ASSOCIATION_FIX.md # 添加歌曲标签关联修复
-│   ├── MAIN_WINDOW_TAG_CREATE_FIX.md # 主窗口标签创建修复
-│   ├── FINAL_TAG_FIX_SUMMARY.md    # 标签修复最终总结
-│   ├── TAG_FIX_SUMMARY.md          # 标签修复总结
-│   ├── PLAY_BUTTON_FIX.md          # 播放按钮修复
-│   ├── PLAY_PAUSE_FIX.md           # 播放暂停修复
-│   ├── PROGRESS_BAR_DRAG_FIX.md    # 进度条拖拽修复
-│   ├── PROGRESS_BAR_FIX_SUMMARY.md # 进度条修复总结
-│   ├── 拖拽音乐进度条失效问题.md    # 进度条拖拽失效修复
-│   ├── 点击音乐条失效问题.md        # 进度条点击失效修复
-│   ├── 音乐播放失败的问题.md        # 音乐播放失败修复
-│   ├── README_AudioEngine.md       # 音频引擎说明
-│   ├── CMakeLists.txt              # CMake构建配置
-│   ├── CMakeLists_test.txt         # CMake测试配置
-│   └── build_test.bat              # 构建测试脚本
+├── docs/                    # 项目功能实现及问题记录文档目录
 ├── examples/                # 示例代码
 │   └── optimization_usage_example.cpp  # 优化使用示例
 ├── images/                  # UI图标资源
@@ -227,14 +197,6 @@ MusicPlayHandle/
 │   │       └── recentplaylistitem.h/cpp # 最近播放列表项
 │   └── utils/               # 工具类
 ├── tests/                   # 测试代码
-│   ├── test_tagmanager.h/cpp  # 标签管理完整测试套件
-│   ├── test_tag_fix.cpp     # 标签修复测试
-│   ├── test_play_pause.cpp  # 播放暂停测试
-│   ├── test_progress_bar_fix.cpp # 进度条修复测试
-│   ├── test_delete_functions.cpp # 删除功能测试
-│   ├── test_manage_tag_dialog.cpp # 标签管理对话框测试
-│   ├── test_playlist_empty_buttons.cpp # 播放列表空按钮测试
-│   └── debug_test.cpp       # 调试测试
 ├── translations/            # 国际化文件
 │   └── en_US.ts            # 英文翻译
 ├── *.ui                    # Qt Designer UI文件
@@ -247,27 +209,16 @@ MusicPlayHandle/
 ├── icon.qrc                # Qt资源文件
 ├── 笔记/                    # 开发笔记
 │   └── 智能体角色/          # AI助手角色定义
-│       ├── Qt 6 MusicPlayHandle 开发助手.md
-│       ├── Qt 6 开发专家.md
-│       └── Qt 6 报错解决专家.md
 └── 设计文档/                # 项目设计文档
     ├── 功能设计/            # 功能设计文档 v0.1-0.2
-    │   ├── 功能设计0.1.md
-    │   └── 功能设计0.2.md
     ├── 多线程设计/          # 多线程设计文档 v0.1-0.2
-    │   ├── 多线程设计0.1.md
-    │   └── 多线程设计0.2.md
     ├── 数据库设计/          # 数据库设计文档 v0.1-0.2
-    │   ├── 数据库设计0.1.md
-    │   └── 数据库设计0.2.md
     ├── 界面设计/            # UI设计文档和原型图
     │   ├── 主界面.png
     │   ├── 歌曲播放界面.png
     │   ├── 添加歌曲界面.png
     │   └── 管理标签界面.png
     └── 设计模式选择/        # 设计模式应用文档
-        ├── 设计模式0.1.md
-        └── 设计模式0.2.md
 ```
 
 ### 🚀 **功能特性**
@@ -283,6 +234,7 @@ MusicPlayHandle/
    - ✅ 精确的拖拽和点击控制
    - ✅ 播放历史自动记录
    - ✅ 最近播放列表管理
+   - ✅ 界面同步机制 (主界面与播放界面)
 
 2. **标签管理系统**
    - ✅ 标签CRUD操作 (创建、读取、更新、删除)
@@ -339,19 +291,13 @@ MusicPlayHandle/
    - ✅ 最近播放列表项组件
    - ✅ 删除模式选择对话框
    - ✅ 批量操作界面
+   - ✅ 界面同步机制
 
 ### 🔧 **构建和运行**
 
 #### 环境要求
-- **Qt环境**:
-  - Qt 6.5.3+ (推荐使用Qt 6.5.3 MinGW 64-bit)
-  - Qt Creator 11.0.0+
-  - Qt多媒体模块和SQL模块
-- **编译器**:
-  - MinGW 64-bit (Windows)
-  - MSVC 2019+ (Windows)
-  - GCC 9.0+ (Linux)
-  - Clang 10+ (macOS)
+- **Qt环境**: Qt 6.5.3+ (推荐使用Qt 6.5.3 MinGW 64-bit)
+- **编译器**: MinGW 64-bit (Windows) / MSVC 2019+ (Windows)
 - **构建工具**:
   - qmake （推荐）
   - CMake 3.16+ (兼容)
@@ -359,17 +305,7 @@ MusicPlayHandle/
 
 #### 构建步骤
 
-1. **获取源码**
-```bash
-# 克隆仓库
-git clone https://github.com/K-irito02/musicPlayHandle.git
-cd musicPlayHandle
-
-# 更新子模块（如果有）
-git submodule update --init --recursive
-```
-
-2. **使用Qt Creator构建 (推荐)**
+1. **使用Qt Creator构建 (推荐)**
 - 启动Qt Creator 11.0.0+
 - 打开项目文件 `musicPlayHandle.pro`
 - 选择构建套件：
@@ -379,95 +315,6 @@ git submodule update --init --recursive
   - macOS: Qt 6.5.3 Clang 10+
 - 配置构建模式（Debug/Release）
 - 点击构建按钮或按Ctrl+B
-
-3. **命令行构建**
-
-**使用 qmake (推荐):**
-```bash
-# Windows (MinGW)
-qmake musicPlayHandle.pro
-mingw32-make -j4
-
-# Windows (MSVC)
-qmake musicPlayHandle.pro
-nmake
-
-# Linux/macOS
-qmake musicPlayHandle.pro
-make -j4
-```
-
-**使用 CMake (兼容):**
-```bash
-# 创建并进入构建目录
-mkdir build && cd build
-
-# 配置项目
-cmake .. -DCMAKE_PREFIX_PATH=/path/to/qt6
-
-# 编译项目
-cmake --build . --config Release
-
-# 运行程序
-.\MusicPlayHandle.exe  # Windows
-./MusicPlayHandle      # Linux/macOS
-```
-
-4. **项目配置**
-- 确保Qt多媒体模块已安装
-- 检查SQLite驱动支持
-- 验证音频编解码器支持
-
-#### 依赖检查
-- 确保Qt多媒体模块已安装
-- 检查系统音频驱动
-- 验证SQLite支持
-- 确认编解码器支持（MP3/WAV/FLAC/OGG）
-
-#### 常见问题
-
-**构建问题:**
-- 找不到Qt库：检查环境变量设置，确保Qt 6.5.3+已正确安装
-- 编解码器缺失：安装相应的Qt多媒体编解码器包
-- 数据库连接错误：检查SQLite驱动，确保Qt SQL模块已安装
-- 音频播放问题：验证系统音频设置和驱动
-
-**运行时问题:**
-- 进度条拖拽失效：检查PreciseSlider组件是否正确初始化
-- 最近播放列表为空：检查数据库权限和PlayHistoryDao配置
-- 最近播放排序错误：检查QListWidget的sortingEnabled属性是否已禁用
-- 播放记录异常更新：检查AudioEngine的播放状态判断逻辑
-- 删除操作崩溃：确保使用最新的删除功能增强版本
-- 播放控制异常：检查AudioEngine线程安全配置
-
-**性能问题:**
-- UI响应缓慢：检查多线程配置和信号槽连接
-- 内存占用过高：检查缓存配置和对象池使用
-- 数据库操作慢：检查索引配置和查询优化
-
-### 🎯 **技术亮点**
-
-#### 🏗️ 架构设计
-- **现代Qt6特性**: 
-  - 充分利用Qt6的新功能和性能改进
-  - 基于Qt6.5.3+的最新特性
-  - 现代化UI组件和控件
-- **C++17标准**: 
-  - 智能指针自动内存管理
-  - Lambda表达式和函数式编程
-  - 模板元编程优化
-- **分层架构**: 
-  - UI控制层、业务逻辑层、数据层分离
-  - MVC模式的控制器设计
-  - 插件化架构支持
-- **组件化设计**: 
-  - 松耦合、高内聚的模块化架构
-  - 可复用的自定义控件
-  - 标准化的组件接口
-- **问题解决能力**: 
-  - 深度调试和问题定位技术
-  - UI控件配置冲突解决
-  - 播放记录异常更新防护机制
 
 #### 🎵 音频播放技术
 - **精确进度控制**: 
@@ -486,6 +333,11 @@ cmake --build . --config Release
   - 线程安全的音频操作
   - 后台线程数据库访问
   - UI线程安全更新机制
+- **界面同步机制**: 
+  - 主界面与播放界面状态同步
+  - 播放控制双向同步
+  - 音量控制实时同步
+  - 进度条状态同步
 
 #### 🚀 性能优化
 - **缓存系统**: 
@@ -541,6 +393,13 @@ cmake --build . --config Release
   - 删除模式选择
   - 批量操作处理
   - 线程安全删除
+- **界面同步**: 
+  - 主界面与播放界面控制同步
+  - 播放状态实时更新
+  - 音量控制双向同步
+  - 进度条状态同步
+  - 播放模式同步
+  - 静音状态同步
 
 ### 📋 **开发状态**
 
@@ -599,6 +458,13 @@ cmake --build . --config Release
   - [x] UI线程安全更新
   - [x] 信号槽异步通信
   - [x] 线程间数据同步
+- [x] **界面同步机制**: 
+  - [x] 主界面与播放界面状态同步
+  - [x] 播放控制双向同步
+  - [x] 音量控制实时同步
+  - [x] 进度条状态同步
+  - [x] 播放模式同步
+  - [x] 静音状态同步
 
 #### 🚧 开发中功能 (UI完善)
 - [ ] **UI美化**: 
@@ -671,19 +537,7 @@ cmake --build . --config Release
   - [ ] 跨平台适配
   - [ ] 移动端特性支持
 
-### 🤝 **贡献指南**
-
-欢迎参与 MusicPlayHandle 项目的开发！请遵循以下步骤：
-
-#### 🔧 开发流程
-1. **Fork 仓库**: 点击右上角 Fork 按钮
-2. **克隆项目**: `git clone https://github.com/your-username/musicPlayHandle.git`
-3. **创建分支**: `git checkout -b feature/your-feature-name`
-4. **开发功能**: 按照项目规范编写代码
-5. **测试验证**: 确保所有测试通过
-6. **提交代码**: `git commit -m "feat: add your feature description"`
-7. **推送分支**: `git push origin feature/your-feature-name`
-8. **创建 PR**: 在 GitHub 上创建 Pull Request
+### 🤝 **开发流程**
 
 #### 📝 代码规范
 - **代码风格**: 使用项目配置的 clang-format 自动格式化
@@ -692,12 +546,6 @@ cmake --build . --config Release
 - **架构原则**: 遵循 SOLID 原则和项目分层架构
 - **错误处理**: 使用 `Result<T>` 模板进行错误处理
 - **线程安全**: 多线程代码必须保证线程安全
-
-#### 🧪 测试要求
-- 新功能必须包含相应的单元测试
-- 确保所有现有测试通过
-- 测试覆盖率应保持在合理水平
-- 使用 Mock 对象进行依赖隔离
 
 #### 📋 提交规范
 使用 [Conventional Commits](https://www.conventionalcommits.org/) 规范：
@@ -723,52 +571,17 @@ cmake --build . --config Release
   - `设计模式选择/` - 设计模式应用文档
 
 #### 🔧 开发文档
-- **[docs/](docs/)** - 技术文档目录
-  - `最近播放排序问题最终修复.md` - 最近播放排序问题最终修复
-  - `拖拽与点击进度条-最终解决及优化方案.md` - 进度条优化方案
-  - `播放与暂停不可控问题.md` - 播放控制问题解决
-  - `PROJECT_OPTIMIZATION_SUMMARY.md` - 项目优化总结
-  - `OPTIMIZATION_GUIDE.md` - 详细优化指南
-  - `GITHUB_UPLOAD_GUIDE.md` - GitHub上传指南
-  - `最近播放功能实现总结.md` - 最近播放功能实现
-  - `删除功能增强与问题修复总结.md` - 删除功能增强
-  - `PRECISE_SLIDER_FIX_GUIDE.md` - 精确滑块修复指南
+- **[docs/](docs/)** - 实现功能及问题记录文档目录
 
 #### 📝 学习资料
 - **[笔记/](笔记/)** - 开发笔记和学习记录
-  - `智能体角色/` - AI助手角色定义
 - **[examples/](examples/)** - 代码示例和使用案例
-  - `optimization_usage_example.cpp` - 优化使用示例
 - **[tests/](tests/)** - 单元测试和测试文档
-  - `test_tagmanager.h/cpp` - 标签管理完整测试套件
-  - `test_play_pause.cpp` - 播放暂停测试
-  - `test_progress_bar_fix.cpp` - 进度条修复测试
-  - `test_delete_functions.cpp` - 删除功能测试
 
 #### 🎨 资源文件
 - **[images/](images/)** - 项目图标和界面截图
 - **[translations/](translations/)** - 多语言翻译文件
 - **[*.ui](*.ui)** - Qt Designer UI界面文件
-
-### 📄 **许可证**
-
-本项目采用 **MIT 许可证** - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-### 📞 **联系方式**
-
-- **项目仓库**: [GitHub - MusicPlayHandle](https://github.com/K-irito02/musicPlayHandle)
-- **问题反馈**: [Issues](https://github.com/K-irito02/musicPlayHandle/issues)
-- **功能建议**: [Discussions](https://github.com/K-irito02/musicPlayHandle/discussions)
-- **技术文档**: 查看 `docs/` 目录下的详细文档
-
-### 🙏 **致谢**
-
-感谢所有为 MusicPlayHandle 项目做出贡献的开发者！
-
-特别感谢以下技术和项目的支持：
-- [Qt Framework](https://www.qt.io/) - 强大的跨平台应用开发框架
-- [SQLite](https://www.sqlite.org/) - 轻量级数据库引擎
-- [CMake](https://cmake.org/) - 跨平台构建系统
 
 ---
 

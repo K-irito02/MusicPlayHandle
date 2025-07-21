@@ -344,8 +344,6 @@ void ManageTagDialogController::deleteTag(const QString& name)
 void ManageTagDialogController::onDataUpdateTimer()
 {
     // 数据更新定时器
-    logDebug("Data update timer triggered");
-    
     try {
         if (!m_initialized || m_processing) {
             logDebug("Skipping data update - not initialized or processing");

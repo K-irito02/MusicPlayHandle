@@ -3,97 +3,38 @@
 
 #include <QObject>
 #include <QTimer>
-#include <QPixmap>
-#include <QVector>
-#include <QGraphicsScene>
-#include <QGraphicsView>
-#include <QGraphicsPixmapItem>
-#include <QGraphicsTextItem>
-#include <QGraphicsRectItem>
-#include <QGraphicsEllipseItem>
-#include <QGraphicsLinearLayout>
-#include <QPainter>
-#include <QBrush>
-#include <QPen>
-#include <QColor>
-#include <QFont>
-#include <QFontMetrics>
-#include <QTextDocument>
-#include <QTextCursor>
-#include <QScrollBar>
-#include <QPropertyAnimation>
-#include <QEasingCurve>
-#include <QParallelAnimationGroup>
-#include <QSequentialAnimationGroup>
 #include <QMutex>
-#include <QSettings>
+#include <QDebug>
+#include "../../audio/audiotypes.h"
+#include "../../models/song.h"
+#include "../dialogs/PlayInterface.h"
 
-// 前向声明
-class PlayInterface;
 class AudioEngine;
 class TagManager;
 class PlaylistManager;
 class DatabaseManager;
 class Logger;
 
-#include "../../models/song.h"
-#include "../../models/playlist.h"
-#include "../../audio/audiotypes.h"
-#include "../../core/logger.h"
-
-// 显示模式枚举
 enum class DisplayMode {
-    Lyrics,
     Cover,
-    Visualization,
-    Mixed
+    Lyrics
 };
 
-// 可视化类型枚举
 enum class VisualizationType {
     Waveform,
     Spectrum,
     VUMeter,
     Oscilloscope,
-    Bars,
-    Particles
+    Spectrogram,
+    None
 };
 
-// 均衡器频段枚举
 enum class EqualizerBand {
-    Band32Hz,
-    Band64Hz,
-    Band125Hz,
-    Band250Hz,
-    Band500Hz,
-    Band1kHz,
-    Band2kHz,
-    Band4kHz,
-    Band8kHz,
-    Band16kHz
-};
-
-// 歌词行结构
-struct LyricLine {
-    qint64 timestamp;
-    QString text;
-    QString translation;
-    bool isHighlighted;
-    
-    LyricLine() : timestamp(0), isHighlighted(false) {}
-};
-
-// 可视化数据结构
-struct VisualizationData {
-    QVector<float> waveform;
-    QVector<float> spectrum;
-    float leftLevel;
-    float rightLevel;
-    float peakLeft;
-    float peakRight;
-    qint64 timestamp;
-    
-    VisualizationData() : leftLevel(0.0f), rightLevel(0.0f), peakLeft(0.0f), peakRight(0.0f), timestamp(0) {}
+    Band60Hz,
+    Band230Hz,
+    Band910Hz,
+    Band3_6kHz,
+    Band14kHz
 };
 
 class PlayInterfaceController : public QObject
@@ -101,106 +42,59 @@ class PlayInterfaceController : public QObject
     Q_OBJECT
 
 public:
+    // 静态常量
+    static const int UPDATE_INTERVAL;  // 更新间隔（毫秒）
+
     explicit PlayInterfaceController(PlayInterface* interface, QObject* parent = nullptr);
     ~PlayInterfaceController();
 
-    // 初始化和清理
-    bool initialize();
+    void initialize();
     void shutdown();
-    bool isInitialized() const;
-
-    // 播放控制
-    void play();
-    void pause();
-    void stop();
-    void next();
-    void previous();
-    void seek(qint64 position);
-    void setVolume(int volume);
-    void setBalance(int balance);
-    void setMuted(bool muted);
-    
-    // 歌曲信息
-    void setCurrentSong(const Song& song);
-    Song getCurrentSong() const;
-    void loadSongInfo(const Song& song);
-    void loadSongLyrics(const Song& song);
-    void loadSongCover(const Song& song);
-    
-    // 显示模式
+    void setAudioEngine(AudioEngine* audioEngine);
+    AudioEngine* getAudioEngine() const;
+    void syncWithMainWindow(qint64 position, qint64 duration, int volume, bool muted);
+    void syncProgressBar(qint64 position, qint64 duration);
+    void syncVolumeControls(int volume, bool muted);
     void setDisplayMode(DisplayMode mode);
     DisplayMode getDisplayMode() const;
-    void toggleDisplayMode();
-    
-    // 可视化
     void setVisualizationType(VisualizationType type);
     VisualizationType getVisualizationType() const;
-    void updateVisualization(const VisualizationData& data);
-    void enableVisualization(bool enabled);
-    
-    // 均衡器
-    void setEqualizerValue(EqualizerBand band, int value);
-    int getEqualizerValue(EqualizerBand band) const;
-    void setEqualizerPreset(const QString& preset);
-    QString getEqualizerPreset() const;
-    void resetEqualizer();
-    
-    // 歌词
-    void setLyrics(const QList<LyricLine>& lyrics);
-    QList<LyricLine> getLyrics() const;
-    void updateLyricHighlight(qint64 currentTime);
-    void scrollToCurrentLyric();
-    
-    // 动画效果
-    void startSpinAnimation();
-    void stopSpinAnimation();
-    void startPulseAnimation();
-    void stopPulseAnimation();
-    void fadeIn();
-    void fadeOut();
+    bool isInitialized() const;
+    Song getCurrentSong() const;
+    void updatePlayModeButton(int playMode);
+    void updateTimeDisplay();
+    void updatePlaybackControls();
+    void updateVolumeDisplay();
+    void updateBalanceDisplay();
 
 signals:
-    // 播放控制信号
+    void playPauseClicked();
+    void nextClicked();
+    void previousClicked();
+    void volumeChanged(int volume);
+    void balanceChanged(int value);
+    void seekRequested(qint64 position);
+    void equalizerChanged(EqualizerBand band, int value);
+    void displayModeChanged(DisplayMode mode);
+    void visualizationTypeChanged(VisualizationType type);
+    void errorOccurred(const QString& error);
+    void playModeClicked();
     void playRequested(const Song& song);
-    void pauseRequested();
     void playModeChangeRequested();
     void nextRequested();
     void previousRequested();
-    void seekRequested(qint64 position);
-    void volumeChanged(int volume);
-    void balanceChanged(int balance);
     void muteToggled(bool muted);
-    
-    // 显示模式信号
-    void displayModeChanged(DisplayMode mode);
-    void visualizationTypeChanged(VisualizationType type);
-    
-    // 均衡器信号
-    void equalizerChanged(EqualizerBand band, int value);
-    void equalizerPresetChanged(const QString& preset);
-    
-    // 歌词信号
-    void lyricClicked(qint64 timestamp);
-    void lyricScrolled(int position);
-    
-    // 错误信号
-    void errorOccurred(const QString& error);
 
-public slots:
-    // 播放状态槽
+private slots:
+    // AudioEngine事件
     void onPlaybackStateChanged(AudioTypes::AudioState state);
     void onCurrentSongChanged(const Song& song);
     void onPositionChanged(qint64 position);
     void onDurationChanged(qint64 duration);
     void onVolumeChanged(int volume);
     void onMutedChanged(bool muted);
-    
-    // 音频数据槽
-    void onAudioDataAvailable(const VisualizationData& data);
-    void onSpectrumDataAvailable(const QVector<float>& spectrum);
-    void onLevelDataAvailable(float leftLevel, float rightLevel);
-    
-    // UI事件槽
+
+    // UI事件
     void onPlayPauseClicked();
     void onPlayModeClicked();
     void onNextClicked();
@@ -208,36 +102,43 @@ public slots:
     void onVolumeSliderChanged(int value);
     void onBalanceSliderChanged(int value);
     void onPositionSliderChanged(int value);
-    void onMuteButtonClicked();
     void onDisplayModeClicked();
     void onVisualizationTypeClicked();
     void onEqualizerSliderChanged(const QVector<int>& values);
-    void onLyricClicked(qint64 timestamp);
+    void onProgressSliderPressed();
+    void onProgressSliderReleased();
+    void onMuteButtonClicked();
 
-private slots:
+    // 定时器事件
     void onUpdateTimer();
-    void onVisualizationTimer();
-    void onLyricUpdateTimer();
-    void onAnimationTimer();
-    void onCoverLoadFinished();
-    void onLyricLoadFinished();
-
-public slots:
-    void updatePlayModeButton(int playMode);
 
 private:
+    void setupConnections();
+    void setCurrentSong(const Song& song);
+    void handleError(const QString& error);
+    void logInfo(const QString& message);
+    void logError(const QString& error);
+    void logDebug(const QString& message);
+    void loadSongInfo(const Song& song);
+    QString formatTime(qint64 milliseconds) const;
+
+    // 界面相关
     PlayInterface* m_interface;
+    bool m_isProgressBarDragging;  // 进度条是否正在拖动
+    
+    // 核心组件
     AudioEngine* m_audioEngine;
     TagManager* m_tagManager;
     PlaylistManager* m_playlistManager;
     DatabaseManager* m_databaseManager;
     Logger* m_logger;
+    QTimer* m_updateTimer;
+    
+    // 初始化标志
+    bool m_initialized;
     
     // 当前状态
     Song m_currentSong;
-    DisplayMode m_displayMode;
-    VisualizationType m_visualizationType;
-    bool m_initialized;
     bool m_isPlaying;
     bool m_isPaused;
     bool m_isMuted;
@@ -246,112 +147,13 @@ private:
     int m_volume;
     int m_balance;
     
-    // 可视化数据
-    VisualizationData m_visualizationData;
-    QVector<QVector<float>> m_waveformHistory;
-    QVector<QVector<float>> m_spectrumHistory;
-    bool m_visualizationEnabled;
-    QMutex m_visualizationMutex;
+    // 显示相关
+    DisplayMode m_displayMode;
+    VisualizationType m_visualizationType;
     
     // 均衡器
     QVector<int> m_equalizerValues;
     QString m_equalizerPreset;
-    
-    // 歌词
-    QList<LyricLine> m_lyrics;
-    int m_currentLyricIndex;
-    QTextDocument* m_lyricDocument;
-    
-    // 图形对象
-    QGraphicsScene* m_waveformScene;
-    QGraphicsScene* m_spectrumScene;
-    QGraphicsScene* m_coverScene;
-    QGraphicsScene* m_lyricScene;
-    QGraphicsPixmapItem* m_coverItem;
-    QGraphicsTextItem* m_lyricItem;
-    
-    // 动画
-    QPropertyAnimation* m_spinAnimation;
-    QPropertyAnimation* m_pulseAnimation;
-    QPropertyAnimation* m_fadeAnimation;
-    QParallelAnimationGroup* m_animationGroup;
-    
-    // 定时器
-    QTimer* m_updateTimer;
-    QTimer* m_visualizationTimer;
-    QTimer* m_lyricUpdateTimer;
-    QTimer* m_animationTimer;
-    
-    // 线程安全
-    QMutex m_mutex;
-    
-    // 设置
-    QSettings* m_settings;
-    
-    // 内部方法
-    void setupConnections();
-    void setupVisualization();
-    void setupAnimations();
-    void loadSettings();
-    void saveSettings();
-    
-    // 可视化绘制
-    void drawWaveform(const QVector<float>& data);
-    void drawSpectrum(const QVector<float>& data);
-    void drawVUMeter(float leftLevel, float rightLevel);
-    void drawOscilloscope(const QVector<float>& data);
-    void drawBars(const QVector<float>& data);
-    void drawParticles(const QVector<float>& data);
-    void drawSingleVUMeter(float x, float y, float width, float height, float level, const QString& label);
-    
-    // 歌词处理
-    void parseLyrics(const QString& lyricText);
-    void updateLyricDisplay();
-    void highlightCurrentLyric();
-    void scrollToLyric(int index);
-    
-    // 封面处理
-    void loadCoverImage(const QString& coverPath);
-    void setCoverImage(const QPixmap& cover);
-    void startCoverAnimation();
-    void stopCoverAnimation();
-    
-    // UI更新
-    void updateTimeDisplay();
-    void updateVolumeDisplay();
-    void updateBalanceDisplay();
-    void updatePlaybackControls();
-    void updateSongInfo();
-    void updateEqualizerDisplay();
-    void updateVisualizationDisplay();
-    // 工具方法
-    QString formatTime(qint64 milliseconds) const;
-    QColor getSpectrumColor(int band) const;
-    QColor getVUMeterColor(float level) const;
-    float calculateRMS(const QVector<float>& data) const;
-    float calculatePeak(const QVector<float>& data) const;
-    QPixmap createDefaultCover() const;
-    QString findLyricFile(const Song& song) const;
-    void updateVisualizationHistory(const QVector<float>& newData);
-    void calculateSpectrumStatistics(const QVector<float>& spectrum);
-    QString findCoverFile(const Song& song) const;
-    
-    // 错误处理
-    void handleError(const QString& error);
-    void logInfo(const QString& message);
-    void logError(const QString& error);
-    void logDebug(const QString& message);
-    
-    // 常量
-    static const int UPDATE_INTERVAL = 50; // ms
-    static const int VISUALIZATION_UPDATE_INTERVAL = 16; // ms (~60fps)
-    static const int LYRIC_UPDATE_INTERVAL = 100; // ms
-    static const int ANIMATION_UPDATE_INTERVAL = 16; // ms
-    static const int SPECTRUM_BANDS = 32;
-    static const int WAVEFORM_SAMPLES = 1024;
-    static const int EQUALIZER_BANDS = 10;
-    static constexpr float VU_METER_DECAY = 0.95f;
-    static constexpr float PEAK_HOLD_TIME = 1000.0f; // ms
 };
 
 #endif // PLAYINTERFACECONTROLLER_H

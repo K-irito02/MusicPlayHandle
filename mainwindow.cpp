@@ -124,8 +124,10 @@ void MainWindow::setupConnections()
         connect(m_controller, &MainWindowController::createTagRequested, this, &MainWindow::onActionCreateTag);
         // 移除这行，避免循环调用
         // connect(m_controller, &MainWindowController::manageTagRequested, this, &MainWindow::onActionManageTag);
-        connect(m_controller, &MainWindowController::playInterfaceRequested, this, &MainWindow::onActionPlayInterface);
-        connect(m_controller, &MainWindowController::settingsRequested, this, &MainWindow::onActionSettings);
+        // 移除这行，避免循环调用
+        // connect(m_controller, &MainWindowController::playInterfaceRequested, this, &MainWindow::onActionPlayInterface);
+        // 移除这行，避免循环调用
+        // connect(m_controller, &MainWindowController::settingsRequested, this, &MainWindow::onActionSettings);
         connect(m_controller, &MainWindowController::errorOccurred, this, [this](const QString& error) {
             QMessageBox::critical(this, "错误", error);
         });
@@ -278,7 +280,6 @@ void MainWindow::onActionPlayInterface()
         
         try {
             PlayInterface* dialog = new PlayInterface(this);
-            dialog->setWindowTitle("播放界面");
             dialog->setAttribute(Qt::WA_DeleteOnClose, true);
             dialog->show();
             refreshPlaybackStatus();
