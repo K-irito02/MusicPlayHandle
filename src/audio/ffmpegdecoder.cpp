@@ -56,6 +56,7 @@ bool FFmpegDecoder::initialize()
         m_balance = 0.0;
         m_isDecoding.storeRelease(0);
         m_isEndOfFile = false;
+        m_audioBuffer.clear();
         
         qDebug() << "FFmpegDecoder: 成员变量初始化完成";
         
@@ -370,9 +371,10 @@ void FFmpegDecoder::seekTo(qint64 position)
             return;
         }
         
+        // 移除对解码状态的强制检查，允许在未解码时也能跳转
+        // 这样可以支持在暂停状态下进行跳转
         if (!m_isDecoding.loadAcquire()) {
-            qWarning() << "FFmpegDecoder: 未在解码中，无法跳转";
-            return;
+            qDebug() << "FFmpegDecoder: 未在解码中，但允许跳转";
         }
         
         qDebug() << "FFmpegDecoder: 清空缓冲区...";
@@ -383,9 +385,10 @@ void FFmpegDecoder::seekTo(qint64 position)
         int64_t timestamp = position * 1000; // 转换为微秒
         qDebug() << "FFmpegDecoder: 计算时间戳:" << timestamp << "微秒";
         
+        qDebug() << "FFmpegDecoder: 执行av_seek_frame，目标时间戳:" << timestamp << "微秒";
         int ret = av_seek_frame(m_formatContext, m_audioStreamIndex, timestamp, AVSEEK_FLAG_BACKWARD);
         if (ret >= 0) {
-            qDebug() << "FFmpegDecoder: 跳转成功";
+            qDebug() << "FFmpegDecoder: 跳转成功，返回值:" << ret;
             
             // 清空解码器缓冲区
             if (m_codecContext) {
@@ -397,9 +400,19 @@ void FFmpegDecoder::seekTo(qint64 position)
             
             m_currentPosition = position;
             emit positionChanged(m_currentPosition);
-            qDebug() << "FFmpegDecoder: 位置已更新为:" << m_currentPosition << "ms";
+            qDebug() << "FFmpegDecoder: 位置已更新为:" << m_currentPosition << "ms，信号已发送";
+            
+            // 如果之前没有在解码，现在开始解码
+            if (!m_isDecoding.loadAcquire()) {
+                qDebug() << "FFmpegDecoder: 跳转后开始解码";
+                m_isDecoding.storeRelease(1);
+            }
         } else {
             qWarning() << "FFmpegDecoder: 跳转失败，错误码:" << ret;
+            // 尝试获取错误信息
+            char errorBuf[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(ret, errorBuf, AV_ERROR_MAX_STRING_SIZE);
+            qWarning() << "FFmpegDecoder: 跳转错误信息:" << errorBuf;
         }
         
     } catch (const std::exception& e) {
@@ -554,6 +567,16 @@ void FFmpegDecoder::decodeLoop()
         
         if (frameCount > 0) {
             qDebug() << "FFmpegDecoder: 本次解码循环处理了" << frameCount << "个音频帧";
+            
+            // 添加适当的延迟，避免音频数据写入过于频繁
+            // 根据采样率和帧大小计算合适的延迟
+            if (m_audioFormat.sampleRate() > 0) {
+                int samplesPerFrame = frameCount * m_audioFormat.channelCount();
+                int delayMs = (samplesPerFrame * 1000) / m_audioFormat.sampleRate();
+                if (delayMs > 0 && delayMs < 50) { // 限制延迟在50ms以内
+                    QThread::msleep(delayMs);
+                }
+            }
         }
         
         av_packet_unref(m_packet);
@@ -1073,8 +1096,8 @@ bool FFmpegDecoder::setupAudioOutput()
         return false;
     }
     
-    // 设置缓冲区大小（32KB）
-    m_audioSink->setBufferSize(32768);
+    // 设置更大的缓冲区大小（64KB）以减少写入不完整的情况
+    m_audioSink->setBufferSize(65536);
     qDebug() << "FFmpegDecoder: 设置音频缓冲区大小:" << m_audioSink->bufferSize() << "字节";
     
     // 设置音量
@@ -1111,22 +1134,55 @@ void FFmpegDecoder::writeAudioData(const QByteArray& data)
         return;
     }
     
-    // 直接写入音频数据，不使用异步
-    qint64 written = m_audioDevice->write(data);
+    // 使用循环写入确保所有数据都被写入
+    QByteArray remainingData = data;
+    int maxRetries = 10; // 最大重试次数
+    int retryCount = 0;
     
-    // 检查写入是否成功
-    if (written != data.size()) {
-        qWarning() << "FFmpegDecoder: 音频数据写入不完整:" << written << "/" << data.size() << "字节";
+    while (!remainingData.isEmpty() && retryCount < maxRetries) {
+        // 检查音频设备状态
+        if (m_audioSink->state() == QAudio::StoppedState) {
+            qWarning() << "FFmpegDecoder: 音频设备已停止，无法写入数据";
+            break;
+        }
         
-        // 如果写入不完整，尝试分块写入
+        // 尝试写入数据
+        qint64 written = m_audioDevice->write(remainingData);
+        
         if (written > 0) {
-            QByteArray remainingData = data.mid(written);
-            qint64 remainingWritten = m_audioDevice->write(remainingData);
-            if (remainingWritten != remainingData.size()) {
-                qWarning() << "FFmpegDecoder: 剩余数据写入失败:" << remainingWritten << "/" << remainingData.size() << "字节";
+            // 移除已写入的数据
+            remainingData = remainingData.mid(written);
+            retryCount = 0; // 重置重试计数
+        } else {
+            // 写入失败，等待一小段时间后重试
+            retryCount++;
+            if (retryCount < maxRetries) {
+                // 等待音频设备有空间
+                QThread::msleep(1); // 等待1毫秒
             }
         }
+    }
+    
+    // 检查最终结果
+    if (!remainingData.isEmpty()) {
+        qWarning() << "FFmpegDecoder: 音频数据写入不完整，剩余:" << remainingData.size() << "/" << data.size() << "字节";
+        
+        // 如果还有剩余数据，将其添加到缓冲区中等待下次写入
+        if (m_audioBuffer.size() < 131072) { // 增加缓冲区大小限制到128KB
+            m_audioBuffer.append(remainingData);
+            qDebug() << "FFmpegDecoder: 剩余数据已添加到缓冲区，当前缓冲区大小:" << m_audioBuffer.size() << "字节";
+        } else {
+            qWarning() << "FFmpegDecoder: 缓冲区已满，丢弃剩余数据:" << remainingData.size() << "字节";
+        }
     } else {
-        qDebug() << "FFmpegDecoder: 音频数据写入成功:" << written << "字节";
+        qDebug() << "FFmpegDecoder: 音频数据写入成功:" << data.size() << "字节";
+    }
+    
+    // 尝试写入缓冲区中的旧数据
+    if (!m_audioBuffer.isEmpty()) {
+        QByteArray bufferData = m_audioBuffer;
+        m_audioBuffer.clear();
+        qDebug() << "FFmpegDecoder: 尝试写入缓冲区中的旧数据:" << bufferData.size() << "字节";
+        writeAudioData(bufferData);
     }
 } 

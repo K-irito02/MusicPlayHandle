@@ -778,10 +778,6 @@ void PlayInterface::setupConnections()
         // 音频引擎切换按钮连接
         connect(ui->pushButton_audio_engine, &QPushButton::clicked, this, &PlayInterface::onAudioEngineButtonClicked);
         
-        // 音量控制连接
-        connect(ui->slider_volume, &QSlider::valueChanged, this, &PlayInterface::onVolumeSliderChanged);
-        connect(ui->pushButton_mute, &QPushButton::clicked, this, &PlayInterface::onMuteButtonClicked);
-        
         // 进度条控件
         if (ui && ui->slider_progress) {
             connect(ui->slider_progress, &QSlider::sliderPressed, this, &PlayInterface::onProgressSliderPressed);
@@ -789,7 +785,7 @@ void PlayInterface::setupConnections()
             connect(ui->slider_progress, &QSlider::sliderMoved, this, &PlayInterface::onProgressSliderMoved);
         }
         
-        // 音量控件
+        // 音量控件 - 修复：使用正确的控件名称
         if (ui && ui->slider_main_volume) {
             connect(ui->slider_main_volume, &QSlider::valueChanged, this, &PlayInterface::onVolumeSliderValueChanged);
         }

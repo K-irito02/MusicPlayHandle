@@ -569,7 +569,13 @@ void MainWindowController::onPlayButtonClicked()
             break;
             
         case AudioTypes::AudioState::Paused:
-            m_audioEngine->play();
+            // 只有在播放列表不为空时才尝试播放
+            if (playlistSize > 0 && currentIndex >= 0) {
+                m_audioEngine->play();
+            } else {
+                qDebug() << "[播放按钮] 播放列表为空或索引无效，尝试构建新播放列表";
+                startNewPlayback();
+            }
             break;
             
         case AudioTypes::AudioState::Loading:
@@ -577,11 +583,23 @@ void MainWindowController::onPlayButtonClicked()
             break;
             
         case AudioTypes::AudioState::Error:
-            m_audioEngine->play();
+            // 只有在播放列表不为空时才尝试播放
+            if (playlistSize > 0 && currentIndex >= 0) {
+                m_audioEngine->play();
+            } else {
+                qDebug() << "[播放按钮] 播放列表为空或索引无效，尝试构建新播放列表";
+                startNewPlayback();
+            }
             break;
             
         default:
-            m_audioEngine->play();
+            // 只有在播放列表不为空时才尝试播放
+            if (playlistSize > 0 && currentIndex >= 0) {
+                m_audioEngine->play();
+            } else {
+                qDebug() << "[播放按钮] 播放列表为空或索引无效，尝试构建新播放列表";
+                startNewPlayback();
+            }
             break;
     }
     
@@ -782,8 +800,18 @@ void MainWindowController::startPlaybackFromCurrentList()
     }
     
     // 开始播放
-    m_audioEngine->play();
-    updateStatusBar(QString("开始播放: %1").arg(playlist[targetIndex].title()), 2000);
+    try {
+        qDebug() << "[startPlaybackFromCurrentList] 准备播放，播放列表大小:" << playlist.size() << "目标索引:" << targetIndex;
+        m_audioEngine->play();
+        updateStatusBar(QString("开始播放: %1").arg(playlist[targetIndex].title()), 2000);
+        qDebug() << "[startPlaybackFromCurrentList] 播放请求已发送";
+    } catch (const std::exception& e) {
+        qCritical() << "[startPlaybackFromCurrentList] 播放时发生异常:" << e.what();
+        updateStatusBar("播放失败：发生异常", 3000);
+    } catch (...) {
+        qCritical() << "[startPlaybackFromCurrentList] 播放时发生未知异常";
+        updateStatusBar("播放失败：未知异常", 3000);
+    }
 }
 
 void MainWindowController::updatePlayButtonUI(bool isPlaying)
