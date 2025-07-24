@@ -402,11 +402,8 @@ void FFmpegDecoder::seekTo(qint64 position)
             emit positionChanged(m_currentPosition);
             qDebug() << "FFmpegDecoder: 位置已更新为:" << m_currentPosition << "ms，信号已发送";
             
-            // 如果之前没有在解码，现在开始解码
-            if (!m_isDecoding.loadAcquire()) {
-                qDebug() << "FFmpegDecoder: 跳转后开始解码";
-                m_isDecoding.storeRelease(1);
-            }
+            // 不自动开始解码，保持原有的解码状态
+            // 这样可以避免在拖拽进度条时意外重新开始播放
         } else {
             qWarning() << "FFmpegDecoder: 跳转失败，错误码:" << ret;
             // 尝试获取错误信息
