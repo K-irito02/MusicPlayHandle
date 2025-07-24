@@ -4701,12 +4701,9 @@ void MainWindowController::updateProgressBar(int value, int maximum)
 // 在onPositionChanged方法中更新进度条
 void MainWindowController::onPositionChanged(qint64 position)
 {
-    qDebug() << "MainWindowController: 收到位置更新信号:" << position << "ms";
-    
     // 更新自定义音乐进度条组件的位置
     if (m_musicProgressBar) {
         m_musicProgressBar->updatePosition(position);
-        qDebug() << "MainWindowController: 已更新进度条位置:" << position << "ms";
     } else {
         qDebug() << "MainWindowController: 进度条组件为空，无法更新位置";
     }
