@@ -1172,6 +1172,7 @@ void MainWindowController::setupConnections()
         connect(m_audioEngine, &AudioEngine::positionChanged, this, &MainWindowController::onPositionChanged);
         connect(m_audioEngine, &AudioEngine::durationChanged, this, &MainWindowController::onDurationChanged);
         connect(m_audioEngine, &AudioEngine::volumeChanged, this, &MainWindowController::onVolumeChanged);
+        connect(m_audioEngine, &AudioEngine::balanceChanged, this, &MainWindowController::onBalanceChanged);
         connect(m_audioEngine, &AudioEngine::mutedChanged, this, &MainWindowController::onMutedChanged);
         connect(m_audioEngine, &AudioEngine::currentSongChanged, this, &MainWindowController::onCurrentSongChanged);
         connect(m_audioEngine, &AudioEngine::playModeChanged, this, &MainWindowController::onPlayModeChanged);
@@ -4751,6 +4752,27 @@ void MainWindowController::onMutedChanged(bool muted)
     }
     
     logInfo(QString("静音状态已更新: %1").arg(muted ? "静音" : "取消静音"));
+}
+
+void MainWindowController::setBalance(double balance)
+{
+    if (m_audioEngine) {
+        m_audioEngine->setBalance(balance);
+    }
+}
+
+void MainWindowController::onBalanceChanged(double balance)
+{
+    // 更新状态栏显示
+    QString balanceText;
+    if (balance < 0) {
+        balanceText = QString("平衡: 左 %1%").arg(qAbs(static_cast<int>(balance * 100)));
+    } else if (balance > 0) {
+        balanceText = QString("平衡: 右 %1%").arg(static_cast<int>(balance * 100));
+    } else {
+        balanceText = "平衡: 中央";
+    }
+    updateStatusBar(balanceText, 2000);
 }
 
 // 添加事件过滤器方法来处理进度条鼠标悬停

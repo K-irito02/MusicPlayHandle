@@ -44,6 +44,8 @@ PreciseSlider::PreciseSlider(Qt::Orientation orientation, QWidget *parent)
 void PreciseSlider::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
+        qDebug() << "PreciseSlider: 鼠标按下，准备处理点击或拖拽";
+        
         // 将坐标转换为相对于PreciseSlider的坐标
         QPoint relativePos = mapFromParent(event->pos());
         
@@ -64,6 +66,7 @@ void PreciseSlider::mouseMoveEvent(QMouseEvent *event)
         if (!m_isDragging) {
             // 第一次移动，设置拖拽状态
             m_isDragging = true;
+            qDebug() << "PreciseSlider: 开始拖拽";
         }
         
         // 将坐标转换为相对于PreciseSlider的坐标
@@ -81,6 +84,8 @@ void PreciseSlider::mouseMoveEvent(QMouseEvent *event)
         // 拖拽时不发送位置变化信号，只在释放时发送最终跳转信号
         // 这样可以避免与外部位置更新产生冲突
         
+        qDebug() << "PreciseSlider: 拖拽中，预览位置:" << targetPosition;
+        
         // 接受事件，避免传递给基类导致额外的处理
         event->accept();
         return;
@@ -93,11 +98,14 @@ void PreciseSlider::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
         if (m_isDragging) {
+            qDebug() << "PreciseSlider: 拖拽结束";
+            
             // 将坐标转换为相对于PreciseSlider的坐标
             QPoint relativePos = mapFromParent(event->pos());
             
             // 拖拽结束时发送最终跳转信号
             qint64 finalPosition = positionFromMouseX(relativePos.x());
+            qDebug() << "PreciseSlider: 发送精确跳转请求:" << finalPosition;
             emit preciseSeekRequested(finalPosition);
             
             // 重置拖拽状态和预览位置
@@ -565,6 +573,11 @@ void MusicProgressBar::resizeEvent(QResizeEvent *event)
 
 void MusicProgressBar::onSliderPressed()
 {
+    qDebug() << "MusicProgressBar: 滑块按下，设置用户交互状态";
+    
+    // 设置用户交互状态
+    m_userInteracting = true;
+    
     // 获取当前鼠标位置（相对于MusicProgressBar）
     QPoint globalPos = QCursor::pos();
     QPoint localPos = mapFromGlobal(globalPos);
@@ -574,6 +587,8 @@ void MusicProgressBar::onSliderPressed()
     if (sliderRect.contains(localPos)) {
         // 方案二：混合方案 - 点击时使用精确计算
         qint64 targetPosition = positionFromMouseX(localPos.x());
+        
+        qDebug() << "MusicProgressBar: 点击跳转到位置:" << targetPosition;
         
         // 立即跳转
         emit seekRequested(targetPosition);
@@ -591,9 +606,12 @@ void MusicProgressBar::onSliderPressed()
 
 void MusicProgressBar::onSliderReleased()
 {
+    qDebug() << "MusicProgressBar: 滑块释放，重置用户交互状态";
+    
     // 方案二：混合方案 - 只有在真正拖拽过的情况下才发送seekRequested信号
     if (m_userInteracting) {
         qint64 seekPosition = positionFromSliderValue(m_slider->value());
+        qDebug() << "MusicProgressBar: 拖拽结束，发送跳转请求:" << seekPosition;
         emit seekRequested(seekPosition);
     }
     
@@ -607,6 +625,7 @@ void MusicProgressBar::onSliderMoved(int value)
     // 方案二：混合方案 - 当滑块移动时，说明用户正在拖拽
     if (!m_userInteracting) {
         m_userInteracting = true;
+        qDebug() << "MusicProgressBar: 检测到拖拽，设置用户交互状态";
     }
     
     // 拖拽时只更新显示，不发送seekRequested信号
@@ -614,6 +633,8 @@ void MusicProgressBar::onSliderMoved(int value)
     m_position = newPosition;
     updateTimeLabels();
     emit positionChanged(newPosition);
+    
+    qDebug() << "MusicProgressBar: 拖拽中，位置更新为:" << newPosition;
 }
 
 void MusicProgressBar::onSliderValueChanged(int value)
@@ -626,7 +647,11 @@ void MusicProgressBar::onSliderValueChanged(int value)
         if (newPosition != m_position) {
             m_position = newPosition;
             updateTimeLabels();
+            qDebug() << "MusicProgressBar: 滑块值变化，更新位置为:" << newPosition;
         }
+    } else {
+        // 不是拖拽，可能是外部更新，记录日志
+        qDebug() << "MusicProgressBar: 外部滑块值变化:" << value << "->" << newPosition;
     }
     // 不是拖拽，可能是点击跳转（已经在onSliderPressed中处理）
 }
@@ -640,8 +665,19 @@ void MusicProgressBar::updatePosition(qint64 position)
     if (!m_userInteracting) {
         m_position = position;
         locker.unlock();
-        updateTimeLabels();
-        updateSliderValue();
+        
+        // 使用信号阻塞机制，避免更新时触发用户交互信号
+        if (m_slider) {
+            m_slider->blockSignals(true);
+            updateTimeLabels();
+            updateSliderValue();
+            m_slider->blockSignals(false);
+        } else {
+            updateTimeLabels();
+            updateSliderValue();
+        }
+    } else {
+        qDebug() << "MusicProgressBar: 用户正在交互，跳过位置更新:" << position;
     }
 }
 
@@ -703,6 +739,7 @@ void MusicProgressBar::updateSliderValue()
     
     // 如果正在拖拽，不更新滑块
     if (m_userInteracting) {
+        qDebug() << "MusicProgressBar: 用户正在交互，跳过滑块更新";
         return;
     }
     
@@ -710,11 +747,15 @@ void MusicProgressBar::updateSliderValue()
     
     locker.unlock();
     
-    // 在主线程中更新UI
-    QMetaObject::invokeMethod(m_slider, [this, sliderValue]() {
-        m_slider->blockSignals(true);
-        m_slider->setValue(sliderValue);
-        m_slider->blockSignals(false);
+    // 在主线程中更新UI，使用更安全的信号阻塞
+    QMetaObject::invokeMethod(this, [this, sliderValue]() {
+        if (m_slider && !m_userInteracting) {
+            // 双重检查，确保用户没有开始交互
+            m_slider->blockSignals(true);
+            m_slider->setValue(sliderValue);
+            m_slider->blockSignals(false);
+            qDebug() << "MusicProgressBar: 滑块值更新为:" << sliderValue;
+        }
     }, Qt::QueuedConnection);
 }
 

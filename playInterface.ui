@@ -676,10 +676,10 @@ QGroupBox::title {
              <item>
               <widget class="QSlider" name="slider_balance">
                <property name="minimum">
-                <number>-50</number>
+                <number>-100</number>
                </property>
                <property name="maximum">
-                <number>50</number>
+                <number>100</number>
                </property>
                <property name="value">
                 <number>0</number>

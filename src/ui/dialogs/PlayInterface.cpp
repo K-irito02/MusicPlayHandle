@@ -3,6 +3,7 @@
 #include "../controllers/playinterfacecontroller.h"
 #include "../widgets/musicprogressbar.h"
 #include "../../audio/audioengine.h"
+#include <QProgressBar>
 
 PlayInterface::PlayInterface(QWidget *parent)
     : QDialog(parent)
@@ -22,6 +23,8 @@ PlayInterface::PlayInterface(QWidget *parent)
     , m_balance(0)
     , m_isMuted(false)
     , m_displayMode(0)
+    , m_vuLevels(2, 0.0)
+    , m_vuUpdateTimer(nullptr)
     , m_currentLyricIndex(-1)
 {
     try {
@@ -51,6 +54,13 @@ PlayInterface::PlayInterface(QWidget *parent)
         // 初始化控制器
         if (m_controller) {
             m_controller->initialize();
+        }
+        
+        // 初始化平衡设置
+        if (m_audioEngine) {
+            double currentBalance = m_audioEngine->getBalance();
+            m_balance = static_cast<int>(currentBalance * 100);
+            updateBalanceDisplay();
         }
         
         qDebug() << "PlayInterface: Initialization completed successfully";
@@ -121,11 +131,32 @@ void PlayInterface::setAudioEngine(AudioEngine* audioEngine)
                     }
                 });
         
-        // 连接AudioEngine信号到自定义进度条
-        connect(m_audioEngine, &AudioEngine::positionChanged, 
+                // 连接AudioEngine信号到自定义进度条
+        connect(m_audioEngine, &AudioEngine::positionChanged,
                 m_customProgressBar, &MusicProgressBar::setPosition);
-        connect(m_audioEngine, &AudioEngine::durationChanged, 
+        connect(m_audioEngine, &AudioEngine::durationChanged,
                 m_customProgressBar, &MusicProgressBar::setDuration);
+        
+        // 连接VU表信号
+        connect(m_audioEngine, &AudioEngine::vuLevelsChanged,
+                this, &PlayInterface::updateVUMeterLevels);
+        
+        // 连接平衡信号
+        connect(m_audioEngine, &AudioEngine::balanceChanged,
+                this, [this](double balance) {
+                    m_balance = static_cast<int>(balance * 100);
+                    updateBalanceDisplay();
+                });
+        
+        // 加载平衡设置
+        m_audioEngine->loadBalanceSettings();
+        
+        // 获取当前平衡设置并更新UI
+        double currentBalance = m_audioEngine->getBalance();
+        m_balance = static_cast<int>(currentBalance * 100);
+        updateBalanceDisplay();
+        
+        qDebug() << "PlayInterface: 平衡设置已加载，当前值:" << m_balance;
     }
     
     // 连接AudioEngine状态信号到PlayInterface
@@ -685,13 +716,7 @@ void PlayInterface::onPositionSliderChanged(int value)
     }
 }
 
-void PlayInterface::onBalanceSliderChanged(int value)
-{
-    if (m_audioEngine) {
-        m_audioEngine->setBalance(value / 100.0);
-    }
-    emit balanceChanged(value);
-}
+
 
 void PlayInterface::onDisplayModeClicked()
 {
@@ -762,6 +787,11 @@ void PlayInterface::setupConnections()
         // 连接音量控件
         if (ui && ui->slider_main_volume) {
             connect(ui->slider_main_volume, &QSlider::valueChanged, this, &PlayInterface::onVolumeSliderValueChanged);
+        }
+        
+        // 连接平衡控件
+        if (ui && ui->slider_balance) {
+            connect(ui->slider_balance, &QSlider::valueChanged, this, &PlayInterface::onBalanceSliderChanged);
         }
         
     } catch (const std::exception& e) {
@@ -883,4 +913,97 @@ QString PlayInterface::formatTime(qint64 milliseconds) const
     int minutes = seconds / 60;
     seconds = seconds % 60;
     return QString("%1:%2").arg(minutes).arg(seconds, 2, 10, QChar('0'));
+}
+
+// ==================== VU表和平衡控制相关方法 ====================
+
+void PlayInterface::updateVUMeterLevels(const QVector<double>& levels)
+{
+    m_vuLevels = levels;
+    updateVUMeterDisplay();
+}
+
+void PlayInterface::updateVUMeterDisplay()
+{
+    if (!ui) return;
+    
+    // 查找VU表组件
+    QProgressBar* leftVU = findChild<QProgressBar*>("progressBar_left_channel");
+    QProgressBar* rightVU = findChild<QProgressBar*>("progressBar_right_channel");
+    
+    if (leftVU && rightVU && m_vuLevels.size() >= 2) {
+        // 更新左声道VU表
+        int leftValue = static_cast<int>(m_vuLevels[0] * 100);
+        leftVU->setValue(leftValue);
+        
+        // 更新右声道VU表
+        int rightValue = static_cast<int>(m_vuLevels[1] * 100);
+        rightVU->setValue(rightValue);
+        
+        // 根据电平设置颜色
+        if (leftValue > 80) {
+            leftVU->setStyleSheet("QProgressBar::chunk { background-color: #ff4444; }");
+        } else if (leftValue > 60) {
+            leftVU->setStyleSheet("QProgressBar::chunk { background-color: #ffaa00; }");
+        } else {
+            leftVU->setStyleSheet("QProgressBar::chunk { background-color: #00aa00; }");
+        }
+        
+        if (rightValue > 80) {
+            rightVU->setStyleSheet("QProgressBar::chunk { background-color: #ff4444; }");
+        } else if (rightValue > 60) {
+            rightVU->setStyleSheet("QProgressBar::chunk { background-color: #00aa00; }");
+        } else {
+            rightVU->setStyleSheet("QProgressBar::chunk { background-color: #00aa00; }");
+        }
+    }
+}
+
+void PlayInterface::updateBalanceDisplay()
+{
+    if (!ui) return;
+    
+    // 查找平衡滑块和显示标签
+    QSlider* balanceSlider = findChild<QSlider*>("slider_balance");
+    QLabel* balanceLabel = findChild<QLabel*>("label_balance_value");
+    
+    if (balanceSlider) {
+        // 更新滑块值
+        balanceSlider->setValue(m_balance);
+    }
+    
+    if (balanceLabel) {
+        // 更新显示文本
+        QString balanceText;
+        if (m_balance < 0) {
+            balanceText = QString("平衡: 左 %1%").arg(qAbs(m_balance));
+        } else if (m_balance > 0) {
+            balanceText = QString("平衡: 右 %1%").arg(m_balance);
+        } else {
+            balanceText = "平衡: 中央";
+        }
+        balanceLabel->setText(balanceText);
+    }
+}
+
+void PlayInterface::onBalanceSliderChanged(int value)
+{
+    m_balance = value;
+    
+    // 更新显示
+    updateBalanceDisplay();
+    
+    // 发送信号给AudioEngine
+    if (m_audioEngine) {
+        // 将-100到100的范围转换为-1.0到1.0
+        double balance = value / 100.0;
+        m_audioEngine->setBalance(balance);
+    }
+    
+    // 保存设置
+    if (m_audioEngine) {
+        m_audioEngine->saveBalanceSettings();
+    }
+    
+    emit balanceChanged(value);
 }

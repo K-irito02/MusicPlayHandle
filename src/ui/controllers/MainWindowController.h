@@ -143,6 +143,7 @@ public:
     void previousSong();
     void seekToPosition(qint64 position);
     void setVolume(int volume);
+    void setBalance(double balance);
     void toggleMute();
     
     // 播放模式
@@ -262,6 +263,7 @@ public slots:
     void onPositionChanged(qint64 position);
     void onDurationChanged(qint64 duration);
     void onVolumeChanged(int volume);
+    void onBalanceChanged(double balance);
     void onMutedChanged(bool muted);
     void onPlayModeChanged(AudioTypes::PlayMode mode);
     void onAudioError(const QString& error);

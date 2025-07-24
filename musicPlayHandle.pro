@@ -46,6 +46,7 @@ SOURCES += \
     src/models/errorlog.cpp \
     src/models/systemlog.cpp \
     src/audio/audioengine.cpp \
+    src/audio/ffmpegdecoder.cpp \
     src/threading/audioworkerthread.cpp \
     src/core/applicationmanager.cpp
 
@@ -74,6 +75,7 @@ HEADERS += \
     src/models/systemlog.h \
     src/audio/audiotypes.h \
     src/audio/audioengine.h \
+    src/audio/ffmpegdecoder.h \
     src/core/applicationmanager.h \
     src/ui/controllers/MainWindowController.h \
     src/ui/controllers/AddSongDialogController.h \

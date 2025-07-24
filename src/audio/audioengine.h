@@ -4,11 +4,16 @@
 #include <QObject>
 #include <QMediaPlayer>
 #include <QAudioOutput>
+#include <QAudioDevice>
+#include <QAudioSink>
+#include <QAudioBuffer>
 #include <QUrl>
 #include <QTimer>
 #include <QMutex>
 #include <QList>
 #include <QRecursiveMutex>
+#include <QVector>
+#include "ffmpegdecoder.h"
 
 #include "../models/song.h"
 #include "audiotypes.h"
@@ -55,7 +60,17 @@ public:
     void setEqualizerEnabled(bool enabled);
     void setEqualizerBands(const QVector<double>& bands);
     void setBalance(double balance);
+    double getBalance() const;
     void setSpeed(double speed);
+    
+    // VU表控制
+    void setVUEnabled(bool enabled);
+    bool isVUEnabled() const;
+    QVector<double> getVULevels() const;
+    
+    // 平衡控制持久化
+    void saveBalanceSettings();
+    void loadBalanceSettings();
     
     // 状态获取
     AudioTypes::AudioState state() const;
@@ -108,6 +123,10 @@ signals:
     void equalizerChanged(bool enabled, const QVector<double>& bands);
     void balanceChanged(double balance);
     void speedChanged(double speed);
+    
+    // VU表信号
+    void vuLevelsChanged(const QVector<double>& levels);
+    void vuEnabledChanged(bool enabled);
     
 private slots:
     void handlePlaybackStateChanged(QMediaPlayer::PlaybackState state);
@@ -167,6 +186,17 @@ private:
     QTimer* m_positionTimer;
     QTimer* m_bufferTimer;
     
+    // VU表相关
+    bool m_vuEnabled;
+    QVector<double> m_vuLevels;
+    QTimer* m_vuTimer;
+    
+    // FFmpeg解码器
+    FFmpegDecoder* m_ffmpegDecoder;
+    
+    // 音频数据相关
+    QVector<double> m_realTimeLevels;
+    
     // 线程安全
     mutable QRecursiveMutex m_mutex;
     
@@ -190,6 +220,20 @@ private:
     void applyAudioEffects();
     void updateBalance();
     void updateSpeed();
+    void updateVULevels();
+    void processAudioFrame(const QByteArray& audioData);
+    
+    // FFmpeg解码器管理
+    void initializeFFmpegDecoder();
+    void cleanupFFmpegDecoder();
+    void setupFFmpegConnections();
+    
+    // 音频数据处理
+    void onFFmpegAudioDataReady(const QVector<double>& levels);
+    void onFFmpegPositionChanged(qint64 position);
+    void onFFmpegDurationChanged(qint64 duration);
+    void onFFmpegDecodingFinished();
+    void onFFmpegErrorOccurred(const QString& error);
     
     // 日志记录
     void logPlaybackEvent(const QString& event, const QString& details = QString());

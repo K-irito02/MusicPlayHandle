@@ -61,6 +61,7 @@ public:
     void updateWaveform(const QVector<float>& data);
     void updateSpectrum(const QVector<float>& data);
     void updateVUMeter(float leftLevel, float rightLevel);
+    void updateVUMeterLevels(const QVector<double>& levels);
     
     // 均衡器相关
     void setEqualizerValues(const QVector<int>& values);
@@ -134,6 +135,8 @@ private:
     void updateVisualization();
     void updateEqualizerDisplay();
     void updateLyricDisplay();
+    void updateBalanceDisplay();
+    void updateVUMeterDisplay();
     QString formatTime(qint64 milliseconds) const;
 
 private:
@@ -162,6 +165,10 @@ private:
     
     // 均衡器值
     QVector<int> m_equalizerValues;
+    
+    // VU表相关
+    QVector<double> m_vuLevels;
+    QTimer* m_vuUpdateTimer;
     
     // 歌词相关
     int m_currentLyricIndex;
