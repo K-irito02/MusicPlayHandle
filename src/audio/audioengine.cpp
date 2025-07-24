@@ -500,37 +500,14 @@ void AudioEngine::seek(qint64 position)
             if (m_ffmpegDecoder) {
                 qDebug() << "[AudioEngine::seek] 使用FFmpeg解码器跳转";
                 try {
-                    // 检查解码器状态，如果未在解码中，尝试重新启动
-                    if (!m_ffmpegDecoder->isDecoding()) {
-                        qWarning() << "[AudioEngine::seek] FFmpeg解码器未在解码中，尝试重新启动";
-                        
-                        // 获取当前歌曲信息
-                        if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
-                            const Song& currentSong = m_playlist.at(m_currentIndex);
-                            
-                            // 重新打开文件并开始解码
-                            if (m_ffmpegDecoder->openFile(currentSong.filePath()) && 
-                                m_ffmpegDecoder->startDecoding()) {
-                                qDebug() << "[AudioEngine::seek] FFmpeg解码器重新启动成功";
-                            } else {
-                                qWarning() << "[AudioEngine::seek] FFmpeg解码器重新启动失败";
-                                return;
-                            }
-                        } else {
-                            qWarning() << "[AudioEngine::seek] 当前歌曲索引无效";
-                            return;
-                        }
-                    }
-                    
-                    // 执行跳转
+                    // 直接执行跳转，不检查解码状态
+                    // FFmpeg解码器的seekTo方法应该能处理各种状态下的跳转
                     qDebug() << "[AudioEngine::seek] 调用FFmpegDecoder::seekTo，目标位置:" << position << "ms";
                     m_ffmpegDecoder->seekTo(position);
                     qDebug() << "[AudioEngine::seek] FFmpeg解码器跳转完成";
                     
-                    // 立即更新位置信息
-                    m_position = position;
-                    emit positionChanged(position);
-                    qDebug() << "[AudioEngine::seek] 位置更新信号已发送";
+                    // 不立即更新位置信息，让FFmpeg解码器的positionChanged信号处理
+                    // 这样可以避免位置更新冲突和重复播放的问题
                     
                     logPlaybackEvent("FFmpeg跳转位置", QString("位置: %1ms").arg(position));
                     return;
@@ -1261,10 +1238,15 @@ void AudioEngine::updatePlaybackPosition()
         
         // 根据当前音频引擎类型获取位置
         if (m_audioEngineType == AudioTypes::AudioEngineType::FFmpeg) {
-            // FFmpeg模式：从FFmpeg解码器获取位置
+            // FFmpeg模式：位置更新主要由FFmpeg解码器的positionChanged信号处理
+            // 这里不再主动获取和发送位置，避免与FFmpeg信号冲突
+            // 只在FFmpeg解码器未运行时提供备用位置更新
             if (m_ffmpegDecoder && m_ffmpegDecoder->isDecoding()) {
-                currentPos = m_ffmpegDecoder->getCurrentPosition();
-                qDebug() << "AudioEngine: FFmpeg位置更新:" << currentPos << "ms";
+                // FFmpeg正在解码，依赖其positionChanged信号，不重复发送
+                return;
+            } else {
+                // FFmpeg未运行，提供当前位置
+                currentPos = m_position;
             }
         } else {
             // QMediaPlayer模式：从QMediaPlayer获取位置
@@ -2035,13 +2017,14 @@ void AudioEngine::onFFmpegAudioDataReady(const QVector<double>& levels)
 
 void AudioEngine::onFFmpegPositionChanged(qint64 position)
 {
-    qDebug() << "AudioEngine: FFmpeg位置变化:" << position;
+    qDebug() << "AudioEngine: FFmpeg位置变化:" << position << "ms";
     
     // 更新当前位置
     m_position = position;
     
     // 发送位置变化信号
     emit positionChanged(position);
+    qDebug() << "AudioEngine: FFmpeg位置更新信号已发送:" << position << "ms";
 }
 
 void AudioEngine::onFFmpegDurationChanged(qint64 duration)

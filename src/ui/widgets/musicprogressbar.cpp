@@ -677,12 +677,15 @@ void MusicProgressBar::updatePosition(qint64 position)
 {
     QMutexLocker locker(&m_mutex);
     
+    qDebug() << "MusicProgressBar: 收到位置更新请求:" << position << "ms，当前位置:" << m_position << "ms，用户交互状态:" << m_userInteracting;
+    
     // **修复8：改进用户交互期间的位置更新处理**
     // 只有在用户没有交互时才更新位置
     // 这样可以避免拖拽时被外部位置更新覆盖，防止进度条跳跃
     if (!m_userInteracting) {
         // 检查位置是否有实际变化，避免无意义的更新
         if (qAbs(m_position - position) > 100) { // 100ms的阈值，避免微小变化
+            qDebug() << "MusicProgressBar: 位置变化超过阈值，执行更新";
             m_position = position;
             locker.unlock();
             
@@ -692,12 +695,16 @@ void MusicProgressBar::updatePosition(qint64 position)
                 updateTimeLabels();
                 updateSliderValue();
                 m_slider->blockSignals(false);
+                qDebug() << "MusicProgressBar: 进度条滑块已更新";
             } else {
                 updateTimeLabels();
                 updateSliderValue();
+                qDebug() << "MusicProgressBar: 时间标签已更新（滑块为空）";
             }
             
-            qDebug() << "MusicProgressBar: 外部位置更新:" << position << "ms";
+            qDebug() << "MusicProgressBar: 外部位置更新完成:" << position << "ms";
+        } else {
+            qDebug() << "MusicProgressBar: 位置变化小于阈值，跳过更新";
         }
     } else {
         // 在用户交互期间，记录但不应用外部位置更新
