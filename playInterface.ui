@@ -1031,11 +1031,64 @@ QGroupBox::title {
            </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>60</width>
+             <width>40</width>
              <height>20</height>
             </size>
            </property>
           </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_audio_engine">
+           <property name="text">
+            <string>QMediaPlayer</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>24</width>
+             <height>24</height>
+            </size>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>100</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>音频引擎：点击切换播放引擎</string>
+           </property>
+           <property name="styleSheet">
+            <string>QPushButton {
+    background-color: #2E3440;
+    color: #D8DEE9;
+    border: 2px solid #4C566A;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 10px;
+    padding: 4px;
+}
+QPushButton:hover {
+    background-color: #3B4252;
+    border-color: #5E81AC;
+}
+QPushButton:pressed {
+    background-color: #434C5E;
+}
+QPushButton:checked {
+    background-color: #5E81AC;
+    border-color: #81A1C1;
+}</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+          </widget>
          </item>
          <item>
           <widget class="QPushButton" name="pushButton_previous_song">

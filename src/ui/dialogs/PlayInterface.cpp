@@ -26,6 +26,7 @@ PlayInterface::PlayInterface(QWidget *parent)
     , m_vuLevels(2, 0.0)
     , m_vuUpdateTimer(nullptr)
     , m_currentLyricIndex(-1)
+    , m_currentEngineType(AudioTypes::AudioEngineType::QMediaPlayer) // 默认QMediaPlayer
 {
     try {
         ui->setupUi(this);
@@ -147,6 +148,14 @@ void PlayInterface::setAudioEngine(AudioEngine* audioEngine)
                     m_balance = static_cast<int>(balance * 100);
                     updateBalanceDisplay();
                 });
+        
+        // 连接音频引擎类型变化信号
+        connect(m_audioEngine, &AudioEngine::audioEngineTypeChanged,
+                this, &PlayInterface::onAudioEngineTypeChanged);
+        
+        // 获取当前音频引擎类型并更新按钮
+        m_currentEngineType = m_audioEngine->getAudioEngineType();
+        onAudioEngineTypeChanged(m_currentEngineType);
         
         // 加载平衡设置
         m_audioEngine->loadBalanceSettings();
@@ -760,36 +769,32 @@ void PlayInterface::onMuteButtonClicked()
 void PlayInterface::setupConnections()
 {
     try {
-        // 连接播放控制按钮
-        if (ui && ui->pushButton_play_pause_song) {
-            connect(ui->pushButton_play_pause_song, &QPushButton::clicked, this, &PlayInterface::onPlayPauseClicked);
-        }
+        // 控制按钮连接
+        connect(ui->pushButton_play_pause_song, &QPushButton::clicked, this, &PlayInterface::onPlayPauseClicked);
+        connect(ui->pushButton_play_mode, &QPushButton::clicked, this, &PlayInterface::onPlayModeClicked);
+        connect(ui->pushButton_previous_song, &QPushButton::clicked, this, &PlayInterface::onPreviousClicked);
+        connect(ui->pushButton_next_song, &QPushButton::clicked, this, &PlayInterface::onNextClicked);
         
-        if (ui && ui->pushButton_previous_song) {
-            connect(ui->pushButton_previous_song, &QPushButton::clicked, this, &PlayInterface::onPreviousClicked);
-        }
+        // 音频引擎切换按钮连接
+        connect(ui->pushButton_audio_engine, &QPushButton::clicked, this, &PlayInterface::onAudioEngineButtonClicked);
         
-        if (ui && ui->pushButton_next_song) {
-            connect(ui->pushButton_next_song, &QPushButton::clicked, this, &PlayInterface::onNextClicked);
-        }
+        // 音量控制连接
+        connect(ui->slider_volume, &QSlider::valueChanged, this, &PlayInterface::onVolumeSliderChanged);
+        connect(ui->pushButton_mute, &QPushButton::clicked, this, &PlayInterface::onMuteButtonClicked);
         
-        if (ui && ui->pushButton_play_mode) {
-            connect(ui->pushButton_play_mode, &QPushButton::clicked, this, &PlayInterface::onPlayModeClicked);
-        }
-        
-        // 连接进度条控件
+        // 进度条控件
         if (ui && ui->slider_progress) {
             connect(ui->slider_progress, &QSlider::sliderPressed, this, &PlayInterface::onProgressSliderPressed);
             connect(ui->slider_progress, &QSlider::sliderReleased, this, &PlayInterface::onProgressSliderReleased);
             connect(ui->slider_progress, &QSlider::sliderMoved, this, &PlayInterface::onProgressSliderMoved);
         }
         
-        // 连接音量控件
+        // 音量控件
         if (ui && ui->slider_main_volume) {
             connect(ui->slider_main_volume, &QSlider::valueChanged, this, &PlayInterface::onVolumeSliderValueChanged);
         }
         
-        // 连接平衡控件
+        // 平衡控件
         if (ui && ui->slider_balance) {
             connect(ui->slider_balance, &QSlider::valueChanged, this, &PlayInterface::onBalanceSliderChanged);
         }
@@ -959,39 +964,11 @@ void PlayInterface::updateVUMeterDisplay()
     }
 }
 
-void PlayInterface::updateBalanceDisplay()
-{
-    if (!ui) return;
-    
-    // 查找平衡滑块和显示标签
-    QSlider* balanceSlider = findChild<QSlider*>("slider_balance");
-    QLabel* balanceLabel = findChild<QLabel*>("label_balance_value");
-    
-    if (balanceSlider) {
-        // 更新滑块值
-        balanceSlider->setValue(m_balance);
-    }
-    
-    if (balanceLabel) {
-        // 更新显示文本
-        QString balanceText;
-        if (m_balance < 0) {
-            balanceText = QString("平衡: 左 %1%").arg(qAbs(m_balance));
-        } else if (m_balance > 0) {
-            balanceText = QString("平衡: 右 %1%").arg(m_balance);
-        } else {
-            balanceText = "平衡: 中央";
-        }
-        balanceLabel->setText(balanceText);
-    }
-}
+
 
 void PlayInterface::onBalanceSliderChanged(int value)
 {
     m_balance = value;
-    
-    // 更新显示
-    updateBalanceDisplay();
     
     // 发送信号给AudioEngine
     if (m_audioEngine) {
@@ -1000,10 +977,97 @@ void PlayInterface::onBalanceSliderChanged(int value)
         m_audioEngine->setBalance(balance);
     }
     
+    // 更新显示
+    updateBalanceDisplay();
+    
     // 保存设置
     if (m_audioEngine) {
         m_audioEngine->saveBalanceSettings();
     }
     
     emit balanceChanged(value);
+}
+
+// ==================== 音频引擎切换实现 ====================
+
+void PlayInterface::onAudioEngineButtonClicked()
+{
+    if (!m_audioEngine) {
+        qWarning() << "PlayInterface: AudioEngine未设置，无法切换音频引擎";
+        return;
+    }
+    
+    // 切换音频引擎类型
+    AudioTypes::AudioEngineType newType;
+    if (m_currentEngineType == AudioTypes::AudioEngineType::QMediaPlayer) {
+        newType = AudioTypes::AudioEngineType::FFmpeg;
+    } else {
+        newType = AudioTypes::AudioEngineType::QMediaPlayer;
+    }
+    
+    qDebug() << "PlayInterface: 用户点击切换音频引擎，从" 
+             << (m_currentEngineType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg")
+             << "切换到" 
+             << (newType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg");
+    
+    // 设置新的音频引擎类型
+    m_audioEngine->setAudioEngineType(newType);
+}
+
+void PlayInterface::onAudioEngineTypeChanged(AudioTypes::AudioEngineType type)
+{
+    m_currentEngineType = type;
+    
+    // 更新按钮文本和样式
+    if (ui && ui->pushButton_audio_engine) {
+        QString buttonText;
+        QString tooltipText;
+        bool isFFmpeg = (type == AudioTypes::AudioEngineType::FFmpeg);
+        
+        if (isFFmpeg) {
+            buttonText = "FFmpeg";
+            tooltipText = "当前使用FFmpeg引擎播放\n支持实时音效处理（平衡控制等）\n点击切换到QMediaPlayer";
+            ui->pushButton_audio_engine->setChecked(true);
+        } else {
+            buttonText = "QMediaPlayer";
+            tooltipText = "当前使用QMediaPlayer播放\n不受音效处理影响，音质纯净\n点击切换到FFmpeg";
+            ui->pushButton_audio_engine->setChecked(false);
+        }
+        
+        ui->pushButton_audio_engine->setText(buttonText);
+        ui->pushButton_audio_engine->setToolTip(tooltipText);
+        
+        qDebug() << "PlayInterface: 音频引擎按钮更新为:" << buttonText;
+    }
+    
+    // 更新平衡控制的可用性提示
+    updateBalanceDisplay();
+}
+
+void PlayInterface::updateBalanceDisplay()
+{
+    if (!ui || !ui->label_balance_value) {
+        return;
+    }
+    
+    // 显示当前平衡值
+    QString balanceText;
+    if (m_balance < 0) {
+        balanceText = QString("平衡: 左 %1%").arg(-m_balance);
+    } else if (m_balance > 0) {
+        balanceText = QString("平衡: 右 %1%").arg(m_balance);
+    } else {
+        balanceText = "平衡: 中央";
+    }
+    
+    // 根据音频引擎类型添加提示
+    if (m_currentEngineType == AudioTypes::AudioEngineType::FFmpeg) {
+        balanceText += " (已生效)";
+        ui->label_balance_value->setStyleSheet("color: #81A1C1;"); // 蓝色表示生效
+    } else {
+        balanceText += " (切换到FFmpeg生效)";
+        ui->label_balance_value->setStyleSheet("color: #D08770;"); // 橙色表示未生效
+    }
+    
+    ui->label_balance_value->setText(balanceText);
 }

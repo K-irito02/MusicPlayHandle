@@ -63,6 +63,11 @@ public:
     double getBalance() const;
     void setSpeed(double speed);
     
+    // 音频引擎类型控制
+    void setAudioEngineType(AudioTypes::AudioEngineType type);
+    AudioTypes::AudioEngineType getAudioEngineType() const;
+    QString getAudioEngineTypeString() const;
+    
     // VU表控制
     void setVUEnabled(bool enabled);
     bool isVUEnabled() const;
@@ -124,6 +129,9 @@ signals:
     void balanceChanged(double balance);
     void speedChanged(double speed);
     
+    // 音频引擎类型信号
+    void audioEngineTypeChanged(AudioTypes::AudioEngineType type);
+    
     // VU表信号
     void vuLevelsChanged(const QVector<double>& levels);
     void vuEnabledChanged(bool enabled);
@@ -175,6 +183,9 @@ private:
     double m_balance;
     double m_speed;
     
+    // 音频引擎类型
+    AudioTypes::AudioEngineType m_audioEngineType;
+    
     // 播放历史
     QList<Song> m_playHistory;
     int m_maxHistorySize;
@@ -208,6 +219,10 @@ private:
     void cleanupAudio();
     void connectSignals();
     void disconnectSignals();
+    
+    // 播放方式实现
+    void playWithQMediaPlayer(const Song& song);
+    void playWithFFmpeg(const Song& song);
     
     void loadMedia(const QString& filePath);
     void updateCurrentSong();

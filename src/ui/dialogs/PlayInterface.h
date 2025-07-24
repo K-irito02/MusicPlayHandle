@@ -115,6 +115,10 @@ private slots:
     void onLyricClicked(qint64 timestamp);
     void onUpdateTimer();
     
+    // 音频引擎切换
+    void onAudioEngineButtonClicked();
+    void onAudioEngineTypeChanged(AudioTypes::AudioEngineType type);
+    
     // 进度条和音量控制槽函数
     void onProgressSliderPressed();
     void onProgressSliderReleased();
@@ -172,6 +176,9 @@ private:
     
     // 歌词相关
     int m_currentLyricIndex;
+    
+    // 音频引擎按钮相关
+    AudioTypes::AudioEngineType m_currentEngineType;
 };
 
 #endif // PLAYINTERFACE_H

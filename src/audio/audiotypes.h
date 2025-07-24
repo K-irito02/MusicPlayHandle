@@ -28,6 +28,14 @@ enum class PlayMode {
 };
 
 /**
+ * @brief 音频引擎类型枚举
+ */
+enum class AudioEngineType {
+    QMediaPlayer,   // 使用QMediaPlayer播放，不受音效处理影响
+    FFmpeg          // 使用FFmpeg解码+QAudioSink播放，支持实时音效处理
+};
+
+/**
  * @brief 缓冲状态枚举（替代 Qt6 中已移除的 QMediaPlayer::BufferStatus）
  */
 enum class BufferStatus {
