@@ -417,7 +417,6 @@ private:
     QFrame* m_tagFrame;
     QFrame* m_songFrame;
     QFrame* m_playbackFrame;
-    QLabel* m_currentSongLabel;
     MusicProgressBar* m_musicProgressBar;  // 自定义音乐进度条组件
     QSlider* m_volumeSlider;
     QPushButton* m_playButton;

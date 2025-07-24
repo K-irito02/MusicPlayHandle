@@ -1,7 +1,25 @@
 #include "song.h"
 #include <QFileInfo>
-#include <QJsonDocument>
+#include <QDateTime>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QBuffer>
+#include <QImage>
+#include <QImageReader>
+#include <QDir>
+#include <QStandardPaths>
+#include <QApplication>
+
+// FFmpeg相关头文件
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/dict.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+}
 
 Song::Song()
     : m_id(0)
@@ -417,12 +435,12 @@ void Song::extractBasicMetadata(Song& song, const QString& filePath)
         } else {
             // 如果分割失败，使用文件名作为标题
             song.setTitle(baseName);
-            song.setArtist("未知艺术家");
+            song.setArtist("");
         }
     } else {
         // 没有分隔符，使用整个文件名作为标题
         song.setTitle(baseName);
-        song.setArtist("未知艺术家");
+        song.setArtist("");
     }
     
     // 设置默认专辑名
@@ -448,8 +466,176 @@ Song Song::fromFile(const QString& filePath)
     song.setDateModified(fileInfo.lastModified());
     song.setIsAvailable(fileInfo.exists());
     
-    // 基本元数据提取
-    extractBasicMetadata(song, filePath);
+    // 使用FFmpeg高级元数据提取
+    extractAdvancedMetadata(song, filePath);
     
     return song;
+}
+
+void Song::extractAdvancedMetadata(Song& song, const QString& filePath)
+{
+    // 首先尝试使用FFmpeg解析元数据
+    if (extractFFmpegMetadata(song, filePath)) {
+        return; // 如果FFmpeg解析成功，直接返回
+    }
+    
+    // 如果FFmpeg解析失败，回退到基本解析
+    extractBasicMetadata(song, filePath);
+}
+
+bool Song::extractFFmpegMetadata(Song& song, const QString& filePath)
+{
+    AVFormatContext* formatContext = nullptr;
+    bool success = false;
+    
+    try {
+        // 打开文件
+        if (avformat_open_input(&formatContext, filePath.toUtf8().constData(), nullptr, nullptr) < 0) {
+            qWarning() << "无法打开音频文件:" << filePath;
+            return false;
+        }
+        
+        // 查找流信息
+        if (avformat_find_stream_info(formatContext, nullptr) < 0) {
+            qWarning() << "无法获取流信息:" << filePath;
+            return false;
+        }
+        
+        // 解析元数据
+        AVDictionary* metadata = formatContext->metadata;
+        AVDictionaryEntry* entry = nullptr;
+        
+        while ((entry = av_dict_get(metadata, "", entry, AV_DICT_IGNORE_SUFFIX))) {
+            QString key = QString::fromUtf8(entry->key);
+            QString value = QString::fromUtf8(entry->value);
+            
+            if (key.toLower() == "title" && !value.isEmpty()) {
+                song.setTitle(value);
+            } else if (key.toLower() == "artist" && !value.isEmpty()) {
+                song.setArtist(value);
+            } else if (key.toLower() == "album" && !value.isEmpty()) {
+                song.setAlbum(value);
+            } else if (key.toLower() == "date" && !value.isEmpty()) {
+                song.setYear(value);
+            } else if (key.toLower() == "genre" && !value.isEmpty()) {
+                song.setGenre(value);
+            }
+        }
+        
+        // 获取时长
+        if (formatContext->duration > 0) {
+            song.setDuration(formatContext->duration / 1000); // 转换为毫秒
+        }
+        
+        success = true;
+        
+    } catch (const std::exception& e) {
+        qWarning() << "FFmpeg元数据解析异常:" << e.what();
+    } catch (...) {
+        qWarning() << "FFmpeg元数据解析未知异常";
+    }
+    
+    // 清理资源
+    if (formatContext) {
+        avformat_close_input(&formatContext);
+    }
+    
+    return success;
+}
+
+QPixmap Song::extractCoverArt(const QString& filePath, const QSize& size)
+{
+    AVFormatContext* formatContext = nullptr;
+    QPixmap coverPixmap;
+    
+    try {
+        // 打开文件
+        if (avformat_open_input(&formatContext, filePath.toUtf8().constData(), nullptr, nullptr) < 0) {
+            return coverPixmap;
+        }
+        
+        // 查找流信息
+        if (avformat_find_stream_info(formatContext, nullptr) < 0) {
+            return coverPixmap;
+        }
+        
+        // 查找封面流
+        for (unsigned int i = 0; i < formatContext->nb_streams; i++) {
+            AVStream* stream = formatContext->streams[i];
+            if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) {
+                AVPacket* packet = &stream->attached_pic;
+                
+                // 解码封面数据
+                QImage coverImage;
+                if (coverImage.loadFromData(packet->data, packet->size)) {
+                    coverPixmap = QPixmap::fromImage(coverImage);
+                    
+                    // 智能缩放，保持宽高比
+                    if (!coverPixmap.isNull() && size.isValid()) {
+                        coverPixmap = coverPixmap.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    }
+                    
+                    break;
+                }
+            }
+        }
+        
+        // 如果没有找到封面流，尝试从元数据中获取
+        if (coverPixmap.isNull()) {
+            AVDictionary* metadata = formatContext->metadata;
+            AVDictionaryEntry* entry = av_dict_get(metadata, "metadata_block_picture", nullptr, 0);
+            
+            if (entry) {
+                // 这里可以解析Base64编码的封面数据
+                // 由于实现复杂，暂时跳过
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        qWarning() << "封面提取异常:" << e.what();
+    } catch (...) {
+        qWarning() << "封面提取未知异常";
+    }
+    
+    // 清理资源
+    if (formatContext) {
+        avformat_close_input(&formatContext);
+    }
+    
+    return coverPixmap;
+}
+
+QString Song::getTitleFromMetadata(const QString& filePath)
+{
+    Song song;
+    extractAdvancedMetadata(song, filePath);
+    return song.title();
+}
+
+QString Song::getArtistFromMetadata(const QString& filePath)
+{
+    Song song;
+    extractAdvancedMetadata(song, filePath);
+    return song.artist();
+}
+
+QString Song::getAlbumFromMetadata(const QString& filePath)
+{
+    Song song;
+    extractAdvancedMetadata(song, filePath);
+    return song.album();
+}
+
+QString Song::getYearFromMetadata(const QString& filePath)
+{
+    Song song;
+    extractAdvancedMetadata(song, filePath);
+    return QString::number(song.year());
+}
+
+QString Song::getGenreFromMetadata(const QString& filePath)
+{
+    Song song;
+    extractAdvancedMetadata(song, filePath);
+    return song.genre();
 }

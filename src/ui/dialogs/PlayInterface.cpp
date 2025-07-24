@@ -92,6 +92,14 @@ void PlayInterface::setAudioEngine(AudioEngine* audioEngine)
     // 设置给控制器
     if (m_controller) {
         m_controller->setAudioEngine(audioEngine);
+        
+        // 同步当前歌曲信息
+        if (audioEngine) {
+            Song currentSong = audioEngine->currentSong();
+            if (currentSong.isValid()) {
+                m_controller->setCurrentSong(currentSong);
+            }
+        }
     }
     
     // 设置给自定义进度条
@@ -193,6 +201,14 @@ void PlayInterface::setupProgressBar()
     QLayout* parentLayout = parentWidget ? parentWidget->layout() : nullptr;
     
     if (parentWidget && parentLayout) {
+        // 隐藏UI文件中的时间标签，因为自定义进度条有自己的时间显示
+        if (ui->label_current_time) {
+            ui->label_current_time->hide();
+        }
+        if (ui->label_total_time) {
+            ui->label_total_time->hide();
+        }
+        
         // 从布局中移除原始滑块
         parentLayout->removeWidget(ui->slider_progress);
         ui->slider_progress->hide();
@@ -208,7 +224,7 @@ void PlayInterface::setupProgressBar()
         m_customProgressBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_customProgressBar->setMinimumHeight(originalGeometry.height());
         
-        qDebug() << "PlayInterface: 自定义进度条设置完成";
+        qDebug() << "PlayInterface: 自定义进度条设置完成，隐藏了重复的时间标签";
     } else {
         qDebug() << "PlayInterface: 无法获取原始滑块的父布局";
         delete m_customProgressBar;
@@ -363,6 +379,19 @@ void PlayInterface::setEqualizerValues(const QVector<int>& values)
 QVector<int> PlayInterface::getEqualizerValues() const
 {
     return m_equalizerValues;
+}
+
+void PlayInterface::showEvent(QShowEvent* event)
+{
+    QDialog::showEvent(event);
+    
+    // 显示时同步当前歌曲信息
+    if (m_controller && m_audioEngine) {
+        Song currentSong = m_audioEngine->currentSong();
+        if (currentSong.isValid()) {
+            m_controller->setCurrentSong(currentSong);
+        }
+    }
 }
 
 void PlayInterface::updatePlayModeButton(const QString& text, const QString& iconPath, const QString& tooltip)
@@ -773,7 +802,53 @@ void PlayInterface::updateVolumeDisplay()
 void PlayInterface::updatePlaybackControls()
 {
     if (ui && ui->pushButton_play_pause_song) {
+        // 更新播放/暂停按钮图标
         ui->pushButton_play_pause_song->setIcon(QIcon(m_isPlaying ? ":/new/prefix1/images/pauseIcon.png" : ":/new/prefix1/images/playIcon.png"));
+        
+        // 更新按钮样式
+        QString styleSheet;
+        if (m_isPlaying) {
+            // 播放状态：蓝色背景
+            styleSheet = "QPushButton#pushButton_play_pause_song { "
+                        "background-color: #0078d4; "
+                        "border: 2px solid #005a9e; "
+                        "border-radius: 8px; "
+                        "padding: 0px; "
+                        "min-width: 50px; "
+                        "max-width: 50px; "
+                        "min-height: 50px; "
+                        "max-height: 50px; "
+                        "} "
+                        "QPushButton#pushButton_play_pause_song:hover { "
+                        "background-color: #005a9e; "
+                        "border-color: #004578; "
+                        "} "
+                        "QPushButton#pushButton_play_pause_song:pressed { "
+                        "background-color: #004578; "
+                        "border-color: #003366; "
+                        "}";
+        } else {
+            // 暂停状态：深色背景
+            styleSheet = "QPushButton#pushButton_play_pause_song { "
+                        "background-color: #2d2d2d; "
+                        "border: 2px solid #0078d4; "
+                        "border-radius: 8px; "
+                        "padding: 0px; "
+                        "min-width: 50px; "
+                        "max-width: 50px; "
+                        "min-height: 50px; "
+                        "max-height: 50px; "
+                        "} "
+                        "QPushButton#pushButton_play_pause_song:hover { "
+                        "background-color: #0078d4; "
+                        "border-color: #005a9e; "
+                        "} "
+                        "QPushButton#pushButton_play_pause_song:pressed { "
+                        "background-color: #005a9e; "
+                        "border-color: #004578; "
+                        "}";
+        }
+        ui->pushButton_play_pause_song->setStyleSheet(styleSheet);
     }
 }
 

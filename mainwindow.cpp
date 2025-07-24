@@ -142,7 +142,7 @@ void MainWindow::setupUI()
     // 设置初始状态
     ui->pushButton_play_pause->setText("播放");
     ui->label_song_title->setText("未选择歌曲");
-    ui->label_song_artist->setText("未知艺术家");
+                ui->label_song_artist->setText("");
     
     // 设置播放模式按钮初始状态（Loop模式）
     ui->pushButton_play_pause->setText("播放");
@@ -508,7 +508,7 @@ void MainWindow::onSongListItemClicked(QListWidgetItem* item)
         if (item) {
             showStatusMessage(QString("选择歌曲: %1").arg(item->text()));
             ui->label_song_title->setText(item->text());
-            ui->label_song_artist->setText("未知艺术家");
+            ui->label_song_artist->setText("");
             qDebug() << "选择歌曲:" << item->text();
         }
     }

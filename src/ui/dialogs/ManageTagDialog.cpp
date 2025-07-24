@@ -169,7 +169,7 @@ void ManageTagDialog::loadSongsForTag(const QString& tag)
                 
                 // 设置显示文本
                 QString displayText = QString("%1 - %2")
-                    .arg(song.artist().isEmpty() ? "未知艺术家" : song.artist())
+                    .arg(song.artist().isEmpty() ? "" : song.artist())
                     .arg(song.title().isEmpty() ? "未知标题" : song.title());
                 
                 if (!song.album().isEmpty()) {

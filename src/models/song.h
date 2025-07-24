@@ -90,6 +90,7 @@ public:
     void setGenre(const QString& genre) { m_genre = genre; }
     int year() const { return m_year; }
     void setYear(int year) { m_year = year; }
+    void setYear(const QString& year) { m_year = year.toInt(); }
     
     // Setters
     void setId(int id) { m_id = id; }
@@ -212,6 +213,19 @@ public:
      */
     static Song fromFile(const QString& filePath);
     
+    // 元数据解析方法
+    static void extractBasicMetadata(Song& song, const QString& filePath);
+    static void extractAdvancedMetadata(Song& song, const QString& filePath);
+    static bool extractFFmpegMetadata(Song& song, const QString& filePath);
+    static QPixmap extractCoverArt(const QString& filePath, const QSize& size = QSize(300, 300));
+    
+    // 元数据获取方法
+    static QString getTitleFromMetadata(const QString& filePath);
+    static QString getArtistFromMetadata(const QString& filePath);
+    static QString getAlbumFromMetadata(const QString& filePath);
+    static QString getYearFromMetadata(const QString& filePath);
+    static QString getGenreFromMetadata(const QString& filePath);
+    
 private:
     int m_id;                           ///< 歌曲ID
     QString m_filePath;                 ///< 文件完整路径
@@ -248,12 +262,7 @@ private:
      */
     QString extractFileName(const QString& filePath) const;
     
-    /**
-     * @brief 提取基本音频元数据
-     * @param song 要设置元数据的Song对象
-     * @param filePath 音频文件路径
-     */
-    static void extractBasicMetadata(Song& song, const QString& filePath);
+
     
     /**
      * @brief 格式化时间

@@ -288,7 +288,7 @@ MusicProgressBar::MusicProgressBar(QWidget *parent)
     
     setTimeLabelsStyle(
         "QLabel {"
-        "    color: #333333;"
+        "    color: #ffffff;"
         "    font-family: 'Consolas', 'Monaco', monospace;"
         "    font-size: 11px;"
         "    font-weight: bold;"

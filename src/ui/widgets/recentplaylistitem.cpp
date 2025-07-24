@@ -61,7 +61,7 @@ void RecentPlayListItem::updateDisplay()
     
     // 设置标题和艺术家
     QString title = m_song.title().isEmpty() ? "未知标题" : m_song.title();
-    QString artist = m_song.artist().isEmpty() ? "未知艺术家" : m_song.artist();
+            QString artist = m_song.artist().isEmpty() ? "" : m_song.artist();
     
     m_titleLabel->setText(title);
     m_artistLabel->setText(artist);

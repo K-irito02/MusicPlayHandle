@@ -81,7 +81,7 @@ MainWindowController::MainWindowController(MainWindow* mainWindow, QObject* pare
     , m_tagFrame(nullptr)
     , m_songFrame(nullptr)
     , m_playbackFrame(nullptr)
-    , m_currentSongLabel(nullptr)
+
     , m_musicProgressBar(nullptr)
     , m_volumeSlider(nullptr)
     , m_playButton(nullptr)
@@ -880,26 +880,48 @@ void MainWindowController::onPreviousButtonClicked()
 
 void MainWindowController::updatePlaybackInfo(const Song& song)
 {
-    if (!m_currentSongLabel) {
-        logWarning("当前歌曲标签控件未初始化");
-        return;
-    }
-    
     try {
         if (song.isValid()) {
-            // 格式化歌曲信息显示
+            // 使用FFmpeg解析的元数据
+            QString artist = song.artist();
+            QString title = song.title();
+            
+            // 如果元数据为空，尝试从文件重新解析
+            if (artist.isEmpty() || title.isEmpty()) {
+                Song updatedSong = song;
+                Song::extractAdvancedMetadata(updatedSong, song.filePath());
+                artist = updatedSong.artist();
+                title = updatedSong.title();
+            }
+            
+            // 分别更新歌曲标题和艺术家标签
+            QLabel* titleLabel = m_mainWindow->findChild<QLabel*>("label_song_title");
+            QLabel* artistLabel = m_mainWindow->findChild<QLabel*>("label_song_artist");
+            
+            if (titleLabel) {
+                if (!title.isEmpty()) {
+                    titleLabel->setText(title);
+                } else {
+                    // 如果没有标题，使用文件名
+                    QFileInfo fileInfo(song.filePath());
+                    titleLabel->setText(fileInfo.baseName());
+                }
+            }
+            
+            if (artistLabel) {
+                artistLabel->setText(artist.isEmpty() ? "" : artist);
+            }
+            
+            // 更新合并的歌曲信息（用于状态栏和窗口标题）
             QString songInfo;
-            if (!song.artist().isEmpty() && !song.title().isEmpty()) {
-                songInfo = QString("%1 - %2").arg(song.artist(), song.title());
-            } else if (!song.title().isEmpty()) {
-                songInfo = song.title();
+            if (!artist.isEmpty() && !title.isEmpty()) {
+                songInfo = QString("%1 - %2").arg(artist, title);
+            } else if (!title.isEmpty()) {
+                songInfo = title;
             } else {
-                // 如果没有标题，使用文件名
                 QFileInfo fileInfo(song.filePath());
                 songInfo = fileInfo.baseName();
             }
-            
-            m_currentSongLabel->setText(songInfo);
             
             // 更新窗口标题
             if (m_mainWindow) {
@@ -917,7 +939,16 @@ void MainWindowController::updatePlaybackInfo(const Song& song)
             logInfo(QString("播放信息更新: %1").arg(songInfo));
         } else {
             // 清空播放信息
-            m_currentSongLabel->setText("未选择歌曲");
+            QLabel* titleLabel = m_mainWindow->findChild<QLabel*>("label_song_title");
+            QLabel* artistLabel = m_mainWindow->findChild<QLabel*>("label_song_artist");
+            
+            if (titleLabel) {
+                titleLabel->setText("未选择歌曲");
+            }
+            if (artistLabel) {
+                artistLabel->setText("");
+            }
+            
             if (m_mainWindow) {
                 m_mainWindow->setWindowTitle("Qt6音频播放器");
             }
@@ -969,7 +1000,6 @@ void MainWindowController::setupUI()
     m_previousButton = m_mainWindow->findChild<QPushButton*>("pushButton_previous");
     m_muteButton = m_mainWindow->findChild<QPushButton*>("pushButton_mute");
     m_volumeSlider = m_mainWindow->findChild<QSlider*>("slider_volume");
-    m_currentSongLabel = m_mainWindow->findChild<QLabel*>("label_song_title");
     m_playModeButton = m_mainWindow->findChild<QPushButton*>("pushButton_play_mode");
     
     // 创建自定义音乐进度条组件
@@ -2517,10 +2547,8 @@ void MainWindowController::updateCurrentSongInfo()
 {
     logInfo("开始更新当前歌曲信息");
     
-    if (!m_audioEngine || !m_currentSongLabel) {
-        logError("音频引擎或歌曲标签为空");
-        logDebug(QString("音频引擎是否为空: %1").arg(m_audioEngine == nullptr));
-        logDebug(QString("歌曲标签是否为空: %1").arg(m_currentSongLabel == nullptr));
+    if (!m_audioEngine) {
+        logError("音频引擎为空");
         return;
     }
     
@@ -2529,12 +2557,47 @@ void MainWindowController::updateCurrentSongInfo()
     logDebug(QString("当前歌曲是否有效: %1").arg(currentSong.isValid()));
     
     if (currentSong.isValid()) {
-        QString songInfo = QString("%1 - %2").arg(currentSong.artist(), currentSong.title());
-        logInfo(QString("歌曲信息: %1").arg(songInfo));
+        // 使用FFmpeg解析的元数据
+        QString artist = currentSong.artist();
+        QString title = currentSong.title();
         
-        logDebug("设置歌曲标签文本");
-        m_currentSongLabel->setText(songInfo);
-        logDebug("歌曲标签文本设置完成");
+        // 如果元数据为空，尝试从文件重新解析
+        if (artist.isEmpty() || title.isEmpty()) {
+            Song updatedSong = currentSong;
+            Song::extractAdvancedMetadata(updatedSong, currentSong.filePath());
+            artist = updatedSong.artist();
+            title = updatedSong.title();
+        }
+        
+        // 分别更新歌曲标题和艺术家标签
+        QLabel* titleLabel = m_mainWindow->findChild<QLabel*>("label_song_title");
+        QLabel* artistLabel = m_mainWindow->findChild<QLabel*>("label_song_artist");
+        
+        if (titleLabel) {
+            if (!title.isEmpty()) {
+                titleLabel->setText(title);
+            } else {
+                QFileInfo fileInfo(currentSong.filePath());
+                titleLabel->setText(fileInfo.baseName());
+            }
+        }
+        
+        if (artistLabel) {
+            artistLabel->setText(artist.isEmpty() ? "" : artist);
+        }
+        
+        // 更新合并的歌曲信息（用于状态栏和窗口标题）
+        QString songInfo;
+        if (!artist.isEmpty() && !title.isEmpty()) {
+            songInfo = QString("%1 - %2").arg(artist, title);
+        } else if (!title.isEmpty()) {
+            songInfo = title;
+        } else {
+            QFileInfo fileInfo(currentSong.filePath());
+            songInfo = fileInfo.baseName();
+        }
+        
+        logInfo(QString("歌曲信息: %1").arg(songInfo));
         
         // 更新窗口标题
         logDebug("更新窗口标题");
@@ -2551,8 +2614,16 @@ void MainWindowController::updateCurrentSongInfo()
     } else {
         qDebug() << "[MainWindowController::updateCurrentSongInfo] 没有有效歌曲，设置默认信息";
         
-        qDebug() << "[MainWindowController::updateCurrentSongInfo] 设置默认歌曲标签文本";
-        m_currentSongLabel->setText("未选择歌曲");
+        // 清空播放信息
+        QLabel* titleLabel = m_mainWindow->findChild<QLabel*>("label_song_title");
+        QLabel* artistLabel = m_mainWindow->findChild<QLabel*>("label_song_artist");
+        
+        if (titleLabel) {
+            titleLabel->setText("未选择歌曲");
+        }
+        if (artistLabel) {
+            artistLabel->setText("");
+        }
         
         if (m_mainWindow) {
             qDebug() << "[MainWindowController::updateCurrentSongInfo] 设置默认窗口标题";

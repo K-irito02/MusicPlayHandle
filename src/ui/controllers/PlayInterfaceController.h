@@ -66,6 +66,7 @@ public:
     void updatePlaybackControls();
     void updateVolumeDisplay();
     void updateBalanceDisplay();
+    void setCurrentSong(const Song& song);
 
 signals:
     void playPauseClicked();
@@ -114,7 +115,6 @@ private slots:
 
 private:
     void setupConnections();
-    void setCurrentSong(const Song& song);
     void handleError(const QString& error);
     void logInfo(const QString& message);
     void logError(const QString& error);

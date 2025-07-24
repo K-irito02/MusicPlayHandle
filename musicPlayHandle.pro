@@ -113,7 +113,20 @@ INCLUDEPATH += \
     src/audio \
     src/managers \
     src/ui/controllers \
-    src/utils
+    src/utils \
+    third_party/ffmpeg/include
+
+# FFmpeg库配置
+win32 {
+    LIBS += -L$$PWD/third_party/ffmpeg/lib \
+            -lavformat \
+            -lavcodec \
+            -lavutil \
+            -lswscale \
+            -lswresample
+} else {
+    LIBS += -lavformat -lavcodec -lavutil -lswscale -lswresample
+}
 
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

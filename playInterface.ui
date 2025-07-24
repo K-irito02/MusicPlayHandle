@@ -92,6 +92,48 @@ QPushButton:checked {
     background-color: #0078d4;
 }
 
+/* 播放控制按钮特殊样式 */
+QPushButton#pushButton_previous_song,
+QPushButton#pushButton_play_pause_song,
+QPushButton#pushButton_play_mode,
+QPushButton#pushButton_next_song {
+    background-color: #2d2d2d;
+    border: 2px solid #0078d4;
+    border-radius: 8px;
+    padding: 0px;
+    min-width: 50px;
+    max-width: 50px;
+    min-height: 50px;
+    max-height: 50px;
+}
+
+QPushButton#pushButton_previous_song:hover,
+QPushButton#pushButton_play_pause_song:hover,
+QPushButton#pushButton_play_mode:hover,
+QPushButton#pushButton_next_song:hover {
+    background-color: #0078d4;
+    border-color: #005a9e;
+}
+
+QPushButton#pushButton_previous_song:pressed,
+QPushButton#pushButton_play_pause_song:pressed,
+QPushButton#pushButton_play_mode:pressed,
+QPushButton#pushButton_next_song:pressed {
+    background-color: #005a9e;
+    border-color: #004578;
+}
+
+/* 播放/暂停按钮特殊样式 */
+QPushButton#pushButton_play_pause_song {
+    background-color: #0078d4;
+    border-color: #005a9e;
+}
+
+QPushButton#pushButton_play_pause_song:hover {
+    background-color: #005a9e;
+    border-color: #004578;
+}
+
 QTabWidget::pane {
     border: 1px solid #3d3d3d;
     background-color: #2d2d2d;
@@ -980,7 +1022,7 @@ QGroupBox::title {
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_playback_buttons">
          <property name="spacing">
-          <number>35</number>
+          <number>20</number>
          </property>
          <item>
           <spacer name="horizontalSpacer_left">
@@ -989,7 +1031,7 @@ QGroupBox::title {
            </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>40</width>
+             <width>60</width>
              <height>20</height>
             </size>
            </property>
@@ -1006,20 +1048,20 @@ QGroupBox::title {
            </property>
            <property name="iconSize">
             <size>
-             <width>28</width>
-             <height>28</height>
+             <width>32</width>
+             <height>32</height>
             </size>
            </property>
            <property name="minimumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>50</width>
+             <height>50</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>50</width>
+             <height>50</height>
             </size>
            </property>
            <property name="toolTip">
@@ -1070,20 +1112,20 @@ QGroupBox::title {
            </property>
            <property name="iconSize">
             <size>
-             <width>28</width>
-             <height>28</height>
+             <width>32</width>
+             <height>32</height>
             </size>
            </property>
            <property name="minimumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>50</width>
+             <height>50</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>50</width>
+             <height>50</height>
             </size>
            </property>
            <property name="toolTip">
@@ -1102,20 +1144,20 @@ QGroupBox::title {
            </property>
            <property name="iconSize">
             <size>
-             <width>28</width>
-             <height>28</height>
+             <width>32</width>
+             <height>32</height>
             </size>
            </property>
            <property name="minimumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>50</width>
+             <height>50</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>50</width>
+             <height>50</height>
             </size>
            </property>
            <property name="toolTip">
@@ -1130,7 +1172,7 @@ QGroupBox::title {
            </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>40</width>
+             <width>60</width>
              <height>20</height>
             </size>
            </property>
@@ -1155,7 +1197,7 @@ QGroupBox::title {
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_progress_control">
          <property name="spacing">
-          <number>30</number>
+          <number>15</number>
          </property>
          <property name="leftMargin">
           <number>20</number>
@@ -1212,13 +1254,13 @@ QGroupBox::title {
            <property name="minimumSize">
             <size>
              <width>60</width>
-             <height>25</height>
+             <height>30</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
              <width>60</width>
-             <height>25</height>
+             <height>30</height>
             </size>
            </property>
            <property name="alignment">
@@ -1226,7 +1268,6 @@ QGroupBox::title {
            </property>
           </widget>
          </item>
-
         </layout>
        </widget>
       </item>

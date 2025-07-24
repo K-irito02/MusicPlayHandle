@@ -106,6 +106,14 @@ void PlayInterfaceController::initialize()
             m_updateTimer->start(UPDATE_INTERVAL);
         }
         
+        // 同步当前歌曲信息（如果有的话）
+        if (m_audioEngine) {
+            Song currentSong = m_audioEngine->currentSong();
+            if (currentSong.isValid()) {
+                setCurrentSong(currentSong);
+            }
+        }
+        
         m_initialized = true;
         
     } catch (const std::exception& e) {
@@ -148,14 +156,7 @@ void PlayInterfaceController::setCurrentSong(const Song& song)
 {
     m_currentSong = song;
     
-    // 更新界面信息
-    if (m_interface) {
-        m_interface->setSongTitle(song.title());
-        m_interface->setSongArtist(song.artist());
-        m_interface->setSongAlbum(song.album());
-    }
-    
-    // 加载歌曲信息
+    // 加载歌曲信息（包括元数据和封面）
     loadSongInfo(song);
 }
 
@@ -256,8 +257,37 @@ VisualizationType PlayInterfaceController::getVisualizationType() const
 
 void PlayInterfaceController::loadSongInfo(const Song& song)
 {
-    // 加载歌曲信息
-    logInfo(QString("Loading song info for: %1").arg(song.title()));
+    try {
+        if (!m_interface) {
+            logError("Interface is null, cannot load song info");
+            return;
+        }
+        
+        // 使用FFmpeg解析的元数据
+        Song updatedSong = song;
+        Song::extractAdvancedMetadata(updatedSong, song.filePath());
+        
+        // 更新界面显示
+        m_interface->setSongTitle(updatedSong.title());
+        m_interface->setSongArtist(updatedSong.artist());
+        m_interface->setSongAlbum(updatedSong.album());
+        
+        // 提取并显示封面
+        QPixmap coverPixmap = Song::extractCoverArt(song.filePath(), QSize(350, 350));
+        if (!coverPixmap.isNull()) {
+            m_interface->setSongCover(coverPixmap);
+        } else {
+            // 如果没有封面，显示默认图片或清空
+            m_interface->setSongCover(QPixmap());
+        }
+        
+        logInfo(QString("Loaded song info for: %1 - %2").arg(updatedSong.artist(), updatedSong.title()));
+        
+    } catch (const std::exception& e) {
+        handleError(QString("Error loading song info: %1").arg(e.what()));
+    } catch (...) {
+        handleError("Unknown error occurred while loading song info");
+    }
 }
 
 // 槽函数实现

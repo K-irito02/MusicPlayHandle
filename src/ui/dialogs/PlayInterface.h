@@ -74,6 +74,9 @@ public:
     
     // AudioEngine设置 - 新增
     void setAudioEngine(AudioEngine* audioEngine);
+    
+    // 事件处理
+    void showEvent(QShowEvent* event) override;
 
 signals:
     void playPauseClicked();
