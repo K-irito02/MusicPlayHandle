@@ -85,6 +85,15 @@ public:
     int currentIndex() const;
     QList<Song> playlist() const;
     
+    // 有效性检查 - 新增
+    bool isValid() const;
+    
+    // 界面管理 - 新增
+    void registerInterface(QObject* interface);
+    void unregisterInterface(QObject* interface);
+    void syncInterfaces();
+    static QSet<QObject*> getConnectedInterfaces();
+    
     // 音频格式支持
     bool isFormatSupported(const QString& filePath) const;
     static QStringList supportedFormats();
@@ -213,6 +222,11 @@ private:
     
     // 支持的音频格式
     static QStringList m_supportedFormats;
+    
+    // 界面管理 - 新增
+    static QSet<QObject*> m_connectedInterfaces;
+    static QMutex m_interfaceMutex;
+    QTimer* m_interfaceSyncTimer; // 界面同步定时器
     
     // 内部方法
     void initializeAudio();

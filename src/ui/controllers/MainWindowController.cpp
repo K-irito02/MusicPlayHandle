@@ -174,12 +174,16 @@ bool MainWindowController::initialize()
 
 void MainWindowController::shutdown()
 {
-
     if (!m_initialized) {
         return;
     }
     
     logInfo("正在关闭主窗口控制器...");
+    
+    // 注销AudioEngine界面
+    if (m_audioEngine) {
+        m_audioEngine->unregisterInterface(this);
+    }
     
     // 场景B触发条件2：用户退出应用程序
     // 如果在"最近播放"标签内有待更新的排序，现在触发更新
@@ -1196,15 +1200,19 @@ void MainWindowController::setupConnections()
     
     // 连接AudioEngine信号
     if (m_audioEngine) {
-        connect(m_audioEngine, &AudioEngine::stateChanged, this, &MainWindowController::onAudioStateChanged);
-        connect(m_audioEngine, &AudioEngine::positionChanged, this, &MainWindowController::onPositionChanged);
-        connect(m_audioEngine, &AudioEngine::durationChanged, this, &MainWindowController::onDurationChanged);
-        connect(m_audioEngine, &AudioEngine::volumeChanged, this, &MainWindowController::onVolumeChanged);
-        connect(m_audioEngine, &AudioEngine::balanceChanged, this, &MainWindowController::onBalanceChanged);
-        connect(m_audioEngine, &AudioEngine::mutedChanged, this, &MainWindowController::onMutedChanged);
-        connect(m_audioEngine, &AudioEngine::currentSongChanged, this, &MainWindowController::onCurrentSongChanged);
-        connect(m_audioEngine, &AudioEngine::playModeChanged, this, &MainWindowController::onPlayModeChanged);
-        connect(m_audioEngine, &AudioEngine::errorOccurred, this, &MainWindowController::onAudioError);
+        // 注册主界面到AudioEngine
+        m_audioEngine->registerInterface(this);
+        
+        // 使用DirectConnection直接更新UI，避免信号循环
+        connect(m_audioEngine, &AudioEngine::stateChanged, this, &MainWindowController::onAudioStateChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::positionChanged, this, &MainWindowController::onPositionChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::durationChanged, this, &MainWindowController::onDurationChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::volumeChanged, this, &MainWindowController::onVolumeChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::balanceChanged, this, &MainWindowController::onBalanceChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::mutedChanged, this, &MainWindowController::onMutedChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::currentSongChanged, this, &MainWindowController::onCurrentSongChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::playModeChanged, this, &MainWindowController::onPlayModeChanged, Qt::DirectConnection);
+        connect(m_audioEngine, &AudioEngine::errorOccurred, this, &MainWindowController::onAudioError, Qt::DirectConnection);
         
         // 注意：MusicProgressBar的更新通过MainWindowController的onPositionChanged和onDurationChanged方法处理
         

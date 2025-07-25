@@ -75,6 +75,11 @@ PlayInterface::PlayInterface(QWidget *parent)
 
 PlayInterface::~PlayInterface()
 {
+    // 注销AudioEngine界面
+    if (m_audioEngine) {
+        m_audioEngine->unregisterInterface(this);
+    }
+    
     if (m_controller) {
         m_controller->shutdown();
         delete m_controller;
@@ -89,114 +94,96 @@ PlayInterface::~PlayInterface()
 // AudioEngine设置 - 修复方法
 void PlayInterface::setAudioEngine(AudioEngine* audioEngine)
 {
+    // 先注销旧的AudioEngine
     if (m_audioEngine) {
+        m_audioEngine->unregisterInterface(this);
+        
         // 断开之前的连接
         disconnect(m_audioEngine, nullptr, this, nullptr);
         if (m_customProgressBar) {
-            disconnect(m_audioEngine, nullptr, m_customProgressBar, nullptr);
             disconnect(m_customProgressBar, nullptr, m_audioEngine, nullptr);
+            disconnect(m_audioEngine, nullptr, m_customProgressBar, nullptr);
         }
     }
     
     m_audioEngine = audioEngine;
     
-    // 设置给控制器
-    if (m_controller) {
-        m_controller->setAudioEngine(audioEngine);
-        
-        // 同步当前歌曲信息
-        if (audioEngine) {
-            Song currentSong = audioEngine->currentSong();
-            if (currentSong.isValid()) {
-                m_controller->setCurrentSong(currentSong);
-            }
-        }
-    }
-    
-    // 设置给自定义进度条
-    if (m_customProgressBar && m_audioEngine) {
-        // 连接自定义进度条信号到PlayInterface
-        connect(m_customProgressBar, &MusicProgressBar::sliderPressed, 
-                this, &PlayInterface::onProgressSliderPressed);
-        connect(m_customProgressBar, &MusicProgressBar::sliderReleased, 
-                this, &PlayInterface::onProgressSliderReleased);
-        connect(m_customProgressBar, &MusicProgressBar::positionChanged, 
-                this, [this](qint64 position) {
-                    emit positionChanged(position);
-                });
-        connect(m_customProgressBar, &MusicProgressBar::seekRequested, 
-                this, [this](qint64 position) {
-                    if (m_audioEngine) {
-                        qDebug() << "PlayInterface: 自定义进度条请求跳转到" << position;
-                        m_audioEngine->seek(position);
-                    }
-                });
-        
-                // 连接AudioEngine信号到自定义进度条
-        connect(m_audioEngine, &AudioEngine::positionChanged,
-                m_customProgressBar, &MusicProgressBar::setPosition);
-        connect(m_audioEngine, &AudioEngine::durationChanged,
-                m_customProgressBar, &MusicProgressBar::setDuration);
-        
-        // 连接VU表信号
-        connect(m_audioEngine, &AudioEngine::vuLevelsChanged,
-                this, &PlayInterface::updateVUMeterLevels);
-        
-        // 连接平衡信号
-        connect(m_audioEngine, &AudioEngine::balanceChanged,
-                this, [this](double balance) {
-                    m_balance = static_cast<int>(balance * 100);
-                    updateBalanceDisplay();
-                });
-        
-        // 连接音频引擎类型变化信号
-        connect(m_audioEngine, &AudioEngine::audioEngineTypeChanged,
-                this, &PlayInterface::onAudioEngineTypeChanged);
-        
-        // 获取当前音频引擎类型并更新按钮
-        m_currentEngineType = m_audioEngine->getAudioEngineType();
-        onAudioEngineTypeChanged(m_currentEngineType);
-        
-        // 加载平衡设置
-        m_audioEngine->loadBalanceSettings();
-        
-        // 获取当前平衡设置并更新UI
-        double currentBalance = m_audioEngine->getBalance();
-        m_balance = static_cast<int>(currentBalance * 100);
-        updateBalanceDisplay();
-        
-        qDebug() << "PlayInterface: 平衡设置已加载，当前值:" << m_balance;
-    }
-    
-    // 连接AudioEngine状态信号到PlayInterface
     if (m_audioEngine) {
-        connect(m_audioEngine, &AudioEngine::stateChanged, this, [this](AudioTypes::AudioState state) {
-            setPlaybackState(state == AudioTypes::AudioState::Playing);
-        });
+        // 注册到AudioEngine
+        m_audioEngine->registerInterface(this);
         
-        connect(m_audioEngine, &AudioEngine::positionChanged, this, &PlayInterface::setCurrentTime);
-        connect(m_audioEngine, &AudioEngine::durationChanged, this, &PlayInterface::setTotalTime);
-        connect(m_audioEngine, &AudioEngine::volumeChanged, this, [this](int volume) {
-            // 避免信号循环
-            if (m_volume != volume) {
-                m_volume = volume;
-                setVolume(volume);
-            }
-        });
-        connect(m_audioEngine, &AudioEngine::mutedChanged, this, &PlayInterface::setMuted);
-        connect(m_audioEngine, &AudioEngine::currentSongChanged, this, [this](const Song& song) {
-            setSongTitle(song.title());
-            setSongArtist(song.artist());
-            setSongAlbum(song.album());
-        });
+        // 使用DirectConnection避免信号循环，直接更新UI
+        connect(m_audioEngine, &AudioEngine::positionChanged, 
+                this, [this](qint64 position) {
+                    setCurrentTime(position);
+                    if (m_customProgressBar) {
+                        m_customProgressBar->setPosition(position);
+                    }
+                }, Qt::DirectConnection);
         
-        // 添加播放模式同步
-        connect(m_audioEngine, &AudioEngine::playModeChanged, this, [this](AudioTypes::PlayMode mode) {
-            updatePlayModeDisplay(mode);
-        });
+        connect(m_audioEngine, &AudioEngine::durationChanged, 
+                this, [this](qint64 duration) {
+                    setTotalTime(duration);
+                    if (m_customProgressBar) {
+                        m_customProgressBar->setDuration(duration);
+                    }
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::balanceChanged, 
+                this, [this](double balance) {
+                    int balanceInt = static_cast<int>(balance * 100);
+                    setBalance(balanceInt);
+                    updateBalanceDisplay();
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::stateChanged, 
+                this, [this](AudioTypes::AudioState state) {
+                    bool isPlaying = (state == AudioTypes::AudioState::Playing);
+                    setPlaybackState(isPlaying);
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::volumeChanged, 
+                this, [this](int volume) {
+                    setVolume(volume);
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::mutedChanged, 
+                this, [this](bool muted) {
+                    setMuted(muted);
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::playModeChanged, 
+                this, [this](AudioTypes::PlayMode mode) {
+                    updatePlayModeDisplay(mode);
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::currentSongChanged, 
+                this, [this](const Song& song) {
+                    if (song.isValid()) {
+                        setSongTitle(song.title());
+                        setSongArtist(song.artist());
+                        setSongAlbum(song.album());
+                    }
+                }, Qt::DirectConnection);
+        
+        connect(m_audioEngine, &AudioEngine::audioEngineTypeChanged, 
+                this, &PlayInterface::onAudioEngineTypeChanged, Qt::DirectConnection);
+        
+        // 添加VU表信号连接
+        connect(m_audioEngine, &AudioEngine::vuLevelsChanged, 
+                this, [this](const QVector<double>& levels) {
+                    if (levels.size() >= 2) {
+                        updateVUMeter(levels[0], levels[1]);
+                    }
+                }, Qt::DirectConnection);
+        
+        // 自定义进度条连接 - 使用QueuedConnection避免阻塞
+        if (m_customProgressBar) {
+            connect(m_customProgressBar, &MusicProgressBar::seekRequested, 
+                    m_audioEngine, &AudioEngine::seek, Qt::QueuedConnection);
+        }
         
         // 同步当前状态
-        setPlaybackState(m_audioEngine->state() == AudioTypes::AudioState::Playing);
         setCurrentTime(m_audioEngine->position());
         setTotalTime(m_audioEngine->duration());
         setVolume(m_audioEngine->volume());
@@ -218,6 +205,20 @@ void PlayInterface::setAudioEngine(AudioEngine* audioEngine)
             m_customProgressBar->setPosition(m_audioEngine->position());
             m_customProgressBar->setDuration(m_audioEngine->duration());
         }
+        
+        // 获取当前音频引擎类型并更新按钮
+        m_currentEngineType = m_audioEngine->getAudioEngineType();
+        onAudioEngineTypeChanged(m_currentEngineType);
+        
+        // 加载平衡设置
+        m_audioEngine->loadBalanceSettings();
+        
+        // 获取当前平衡设置并更新UI
+        double currentBalance = m_audioEngine->getBalance();
+        m_balance = static_cast<int>(currentBalance * 100);
+        updateBalanceDisplay();
+        
+        qDebug() << "PlayInterface: 平衡设置已加载，当前值:" << m_balance;
         
         qDebug() << "PlayInterface: AudioEngine连接完成";
     }
@@ -544,56 +545,41 @@ void PlayInterface::updateMuteButtonIcon()
 // 槽函数实现 - 直接操作AudioEngine，采用与主界面相同的逻辑
 void PlayInterface::onPlayPauseClicked()
 {
-    qDebug() << "PlayInterface: 播放/暂停按钮点击";
-    if (!m_audioEngine) {
-        qDebug() << "PlayInterface: AudioEngine未设置";
-        emit playPauseClicked();
-        return;
-    }
-    
-    // 采用与主界面相同的逻辑
-    AudioTypes::AudioState currentState = m_audioEngine->state();
-    int playlistSize = m_audioEngine->playlist().size();
-    int currentIndex = m_audioEngine->currentIndex();
-    
-    qDebug() << "PlayInterface: 当前音频状态:" << static_cast<int>(currentState);
-    qDebug() << "PlayInterface: 当前播放列表大小:" << playlistSize;
-    qDebug() << "PlayInterface: 当前播放索引:" << currentIndex;
-    
-    // 首先检查播放列表是否为空或索引无效
-    if (playlistSize == 0 || currentIndex < 0) {
-        qDebug() << "PlayInterface: 播放列表为空，显示提示";
-        // 这里应该触发主界面的 startNewPlayback 逻辑
-        // 但由于播放界面独立，只能显示提示
-        emit playPauseClicked(); // 发送信号让主界面处理
-        return;
-    }
-    
-    // 播放列表不为空时的播放/暂停逻辑
-    switch (currentState) {
-    case AudioTypes::AudioState::Playing:
-        m_audioEngine->pause();
-        qDebug() << "PlayInterface: 发送暂停请求";
-        break;
+    try {
+        qDebug() << "PlayInterface: 播放/暂停按钮点击";
         
-    case AudioTypes::AudioState::Paused:
-        m_audioEngine->play();
-        qDebug() << "PlayInterface: 发送播放请求";
-        break;
+        if (m_audioEngine) {
+            // 检查当前状态
+            AudioTypes::AudioState currentState = m_audioEngine->state();
+            qDebug() << "PlayInterface: 当前音频状态:" << static_cast<int>(currentState);
+            
+            // 检查播放列表
+            int playlistSize = m_audioEngine->playlist().size();
+            int currentIndex = m_audioEngine->currentIndex();
+            qDebug() << "PlayInterface: 当前播放列表大小:" << playlistSize;
+            qDebug() << "PlayInterface: 当前播放索引:" << currentIndex;
+            
+            // 如果播放列表为空或索引无效
+            if (playlistSize == 0 || currentIndex < 0) {
+                qDebug() << "PlayInterface: 播放列表为空，显示提示";
+                emit playPauseClicked(); // 发送信号让主界面处理
+                return;
+            }
+            
+            // 播放列表不为空，正常切换播放状态
+            if (currentState == AudioTypes::AudioState::Playing) {
+                m_audioEngine->pause();
+            } else {
+                m_audioEngine->play();
+            }
+        } else {
+            emit playPauseClicked(); // 发送信号让主界面处理
+        }
         
-    case AudioTypes::AudioState::Loading:
-        qDebug() << "PlayInterface: 正在加载媒体文件...";
-        break;
-        
-    case AudioTypes::AudioState::Error:
-        m_audioEngine->play();
-        qDebug() << "PlayInterface: 错误状态，尝试重新播放";
-        break;
-        
-    default:
-        m_audioEngine->play();
-        qDebug() << "PlayInterface: 默认播放";
-        break;
+    } catch (const std::exception& e) {
+        qCritical() << "PlayInterface: onPlayPauseClicked异常:" << e.what();
+    } catch (...) {
+        qCritical() << "PlayInterface: onPlayPauseClicked未知异常";
     }
 }
 
@@ -988,56 +974,78 @@ void PlayInterface::onBalanceSliderChanged(int value)
 
 void PlayInterface::onAudioEngineButtonClicked()
 {
-    if (!m_audioEngine) {
-        qWarning() << "PlayInterface: AudioEngine未设置，无法切换音频引擎";
-        return;
+    try {
+        if (!m_audioEngine) {
+            qWarning() << "PlayInterface: AudioEngine未设置，无法切换音频引擎";
+            return;
+        }
+        
+        // 切换音频引擎类型
+        AudioTypes::AudioEngineType newType;
+        if (m_currentEngineType == AudioTypes::AudioEngineType::QMediaPlayer) {
+            newType = AudioTypes::AudioEngineType::FFmpeg;
+        } else {
+            newType = AudioTypes::AudioEngineType::QMediaPlayer;
+        }
+        
+        qDebug() << "PlayInterface: 用户点击切换音频引擎，从" 
+                 << (m_currentEngineType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg")
+                 << "切换到" 
+                 << (newType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg");
+        
+        // 使用QueuedConnection确保在主线程中执行
+        QMetaObject::invokeMethod(this, [this, newType]() {
+            try {
+                m_audioEngine->setAudioEngineType(newType);
+            } catch (const std::exception& e) {
+                qCritical() << "PlayInterface: 切换音频引擎异常:" << e.what();
+            } catch (...) {
+                qCritical() << "PlayInterface: 切换音频引擎未知异常";
+            }
+        }, Qt::QueuedConnection);
+        
+    } catch (const std::exception& e) {
+        qCritical() << "PlayInterface: onAudioEngineButtonClicked异常:" << e.what();
+    } catch (...) {
+        qCritical() << "PlayInterface: onAudioEngineButtonClicked未知异常";
     }
-    
-    // 切换音频引擎类型
-    AudioTypes::AudioEngineType newType;
-    if (m_currentEngineType == AudioTypes::AudioEngineType::QMediaPlayer) {
-        newType = AudioTypes::AudioEngineType::FFmpeg;
-    } else {
-        newType = AudioTypes::AudioEngineType::QMediaPlayer;
-    }
-    
-    qDebug() << "PlayInterface: 用户点击切换音频引擎，从" 
-             << (m_currentEngineType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg")
-             << "切换到" 
-             << (newType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg");
-    
-    // 设置新的音频引擎类型
-    m_audioEngine->setAudioEngineType(newType);
 }
 
 void PlayInterface::onAudioEngineTypeChanged(AudioTypes::AudioEngineType type)
 {
-    m_currentEngineType = type;
-    
-    // 更新按钮文本和样式
-    if (ui && ui->pushButton_audio_engine) {
-        QString buttonText;
-        QString tooltipText;
-        bool isFFmpeg = (type == AudioTypes::AudioEngineType::FFmpeg);
+    try {
+        m_currentEngineType = type;
         
-        if (isFFmpeg) {
-            buttonText = "FFmpeg";
-            tooltipText = "当前使用FFmpeg引擎播放\n支持实时音效处理（平衡控制等）\n点击切换到QMediaPlayer";
-            ui->pushButton_audio_engine->setChecked(true);
-        } else {
-            buttonText = "QMediaPlayer";
-            tooltipText = "当前使用QMediaPlayer播放\n不受音效处理影响，音质纯净\n点击切换到FFmpeg";
-            ui->pushButton_audio_engine->setChecked(false);
+        // 更新按钮文本和样式
+        if (ui && ui->pushButton_audio_engine) {
+            QString buttonText;
+            QString tooltipText;
+            bool isFFmpeg = (type == AudioTypes::AudioEngineType::FFmpeg);
+            
+            if (isFFmpeg) {
+                buttonText = "FFmpeg";
+                tooltipText = "当前使用FFmpeg引擎播放\n支持实时音效处理（平衡控制等）\n点击切换到QMediaPlayer";
+                ui->pushButton_audio_engine->setChecked(true);
+            } else {
+                buttonText = "QMediaPlayer";
+                tooltipText = "当前使用QMediaPlayer播放\n不受音效处理影响，音质纯净\n点击切换到FFmpeg";
+                ui->pushButton_audio_engine->setChecked(false);
+            }
+            
+            ui->pushButton_audio_engine->setText(buttonText);
+            ui->pushButton_audio_engine->setToolTip(tooltipText);
+            
+            qDebug() << "PlayInterface: 音频引擎按钮更新为:" << buttonText;
         }
         
-        ui->pushButton_audio_engine->setText(buttonText);
-        ui->pushButton_audio_engine->setToolTip(tooltipText);
+        // 更新平衡控制的可用性提示
+        updateBalanceDisplay();
         
-        qDebug() << "PlayInterface: 音频引擎按钮更新为:" << buttonText;
+    } catch (const std::exception& e) {
+        qCritical() << "PlayInterface: onAudioEngineTypeChanged异常:" << e.what();
+    } catch (...) {
+        qCritical() << "PlayInterface: onAudioEngineTypeChanged未知异常";
     }
-    
-    // 更新平衡控制的可用性提示
-    updateBalanceDisplay();
 }
 
 void PlayInterface::updateBalanceDisplay()
@@ -1066,4 +1074,79 @@ void PlayInterface::updateBalanceDisplay()
     }
     
     ui->label_balance_value->setText(balanceText);
+}
+
+void PlayInterface::mousePressEvent(QMouseEvent *event)
+{
+    try {
+        // 检查是否在FFmpeg模式下
+        if (m_audioEngine && m_currentEngineType == AudioTypes::AudioEngineType::FFmpeg) {
+            // FFmpeg模式下，增加额外的安全检查
+            if (!m_audioEngine->isValid()) {
+                qWarning() << "PlayInterface: FFmpeg模式下AudioEngine无效，忽略鼠标事件";
+                event->ignore();
+                return;
+            }
+        }
+        
+        // 正常处理鼠标事件
+        QDialog::mousePressEvent(event);
+        
+    } catch (const std::exception& e) {
+        qCritical() << "PlayInterface: mousePressEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "PlayInterface: mousePressEvent未知异常";
+        event->ignore();
+    }
+}
+
+void PlayInterface::mouseReleaseEvent(QMouseEvent *event)
+{
+    try {
+        // 检查是否在FFmpeg模式下
+        if (m_audioEngine && m_currentEngineType == AudioTypes::AudioEngineType::FFmpeg) {
+            // FFmpeg模式下，增加额外的安全检查
+            if (!m_audioEngine->isValid()) {
+                qWarning() << "PlayInterface: FFmpeg模式下AudioEngine无效，忽略鼠标事件";
+                event->ignore();
+                return;
+            }
+        }
+        
+        // 正常处理鼠标事件
+        QDialog::mouseReleaseEvent(event);
+        
+    } catch (const std::exception& e) {
+        qCritical() << "PlayInterface: mouseReleaseEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "PlayInterface: mouseReleaseEvent未知异常";
+        event->ignore();
+    }
+}
+
+void PlayInterface::mouseMoveEvent(QMouseEvent *event)
+{
+    try {
+        // 检查是否在FFmpeg模式下
+        if (m_audioEngine && m_currentEngineType == AudioTypes::AudioEngineType::FFmpeg) {
+            // FFmpeg模式下，增加额外的安全检查
+            if (!m_audioEngine->isValid()) {
+                qWarning() << "PlayInterface: FFmpeg模式下AudioEngine无效，忽略鼠标事件";
+                event->ignore();
+                return;
+            }
+        }
+        
+        // 正常处理鼠标事件
+        QDialog::mouseMoveEvent(event);
+        
+    } catch (const std::exception& e) {
+        qCritical() << "PlayInterface: mouseMoveEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "PlayInterface: mouseMoveEvent未知异常";
+        event->ignore();
+    }
 }

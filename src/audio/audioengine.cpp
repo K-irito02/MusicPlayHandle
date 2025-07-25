@@ -24,6 +24,10 @@ QStringList AudioEngine::m_supportedFormats = {
     "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "opus", "mp4", "ape", "aiff"
 };
 
+// 新增：界面管理
+QSet<QObject*> AudioEngine::m_connectedInterfaces;
+QMutex AudioEngine::m_interfaceMutex;
+
 AudioEngine::AudioEngine(QObject* parent)
     : QObject(parent),
     m_player(nullptr),
@@ -50,7 +54,8 @@ AudioEngine::AudioEngine(QObject* parent)
     m_vuLevels(2, 0.0), // 左右声道
     m_vuTimer(nullptr),
     m_ffmpegDecoder(nullptr),
-    m_realTimeLevels(2, 0.0)
+    m_realTimeLevels(2, 0.0),
+    m_interfaceSyncTimer(nullptr) // 新增：界面同步定时器
 {
     // 初始化均衡器频段（10个频段）
     m_equalizerBands.resize(10);
@@ -77,6 +82,11 @@ AudioEngine::AudioEngine(QObject* parent)
     m_vuTimer = new QTimer(this);
     connect(m_vuTimer, &QTimer::timeout, this, &AudioEngine::updateVULevels);
     m_vuTimer->start(50); // 20fps更新频率
+    
+    // 新增：初始化界面同步定时器
+    m_interfaceSyncTimer = new QTimer(this);
+    connect(m_interfaceSyncTimer, &QTimer::timeout, this, &AudioEngine::syncInterfaces);
+    m_interfaceSyncTimer->start(100); // 10fps同步频率
     
     // 确保音量设置正确
     if (m_audioOutput) {
@@ -482,14 +492,26 @@ void AudioEngine::seek(qint64 position)
                         return;
                     }
                     
-                    // 直接执行跳转，不检查解码状态
-                    // FFmpeg解码器的seekTo方法应该能处理各种状态下的跳转
-                    m_ffmpegDecoder->seekTo(position);
+                    // 使用QueuedConnection确保在主线程中执行
+                    QMetaObject::invokeMethod(this, [this, position]() {
+                        try {
+                            // 直接执行跳转，不检查解码状态
+                            // FFmpeg解码器的seekTo方法应该能处理各种状态下的跳转
+                            m_ffmpegDecoder->seekTo(position);
+                            
+                            // 不立即更新位置信息，让FFmpeg解码器的positionChanged信号处理
+                            // 这样可以避免位置更新冲突和重复播放的问题
+                            
+                            logPlaybackEvent("FFmpeg跳转位置", QString("位置: %1ms").arg(position));
+                        } catch (const std::exception& e) {
+                            qCritical() << "[AudioEngine::seek] FFmpeg跳转异常:" << e.what();
+                            logError(QString("FFmpeg跳转异常: %1").arg(e.what()));
+                        } catch (...) {
+                            qCritical() << "[AudioEngine::seek] FFmpeg跳转未知异常";
+                            logError("FFmpeg跳转未知异常");
+                        }
+                    }, Qt::QueuedConnection);
                     
-                    // 不立即更新位置信息，让FFmpeg解码器的positionChanged信号处理
-                    // 这样可以避免位置更新冲突和重复播放的问题
-                    
-                    logPlaybackEvent("FFmpeg跳转位置", QString("位置: %1ms").arg(position));
                     return;
                 } catch (const std::exception& e) {
                     qCritical() << "[AudioEngine::seek] FFmpeg跳转异常:" << e.what();
@@ -505,33 +527,18 @@ void AudioEngine::seek(qint64 position)
             }
         } else {
             // QMediaPlayer模式：使用QMediaPlayer跳转
-            if (!m_player) {
-                logError("QMediaPlayer为空，无法执行跳转");
-                return;
+            if (m_player) {
+                m_player->setPosition(position);
+                logPlaybackEvent("QMediaPlayer跳转位置", QString("位置: %1ms").arg(position));
+            } else {
+                logError("QMediaPlayer未初始化");
             }
-            
-            // 检查播放器状态
-            QMediaPlayer::PlaybackState playerState = m_player->playbackState();
-            
-            // 如果播放器处于停止状态，需要先加载媒体
-            if (playerState == QMediaPlayer::StoppedState) {
-                qWarning() << "[AudioEngine::seek] 播放器处于停止状态，无法跳转";
-                return;
-            }
-            
-            // 直接使用主线程的QMediaPlayer执行跳转
-            m_player->setPosition(position);
-            
-            // 不立即更新m_position和发送positionChanged信号
-            // 让QMediaPlayer::positionChanged信号来处理位置更新
-            // 这样可以避免异步操作导致的位置不一致问题
-            
-            logPlaybackEvent("QMediaPlayer跳转位置", QString("位置: %1ms").arg(position));
         }
         
     } catch (const std::exception& e) {
-        logError(QString("跳转失败: %1").arg(e.what()));
-        qCritical() << "[AudioEngine::seek] 跳转异常:" << e.what();
+        logError(QString("跳转异常: %1").arg(e.what()));
+    } catch (...) {
+        logError("跳转未知异常");
     }
 }
 
@@ -1027,16 +1034,20 @@ void AudioEngine::clearHistory()
 // 私有槽函数实现
 void AudioEngine::onPositionChanged(qint64 position)
 {
-    QMutexLocker locker(&m_mutex);
     m_position = position;
-    emit positionChanged(position);
+    // 使用QueuedConnection确保在主线程中发送信号，避免阻塞
+    QMetaObject::invokeMethod(this, [this, position]() {
+        emit positionChanged(position);
+    }, Qt::QueuedConnection);
 }
 
 void AudioEngine::onDurationChanged(qint64 duration)
 {
-    QMutexLocker locker(&m_mutex);
     m_duration = duration;
-    emit durationChanged(duration);
+    // 使用QueuedConnection确保在主线程中发送信号，避免阻塞
+    QMetaObject::invokeMethod(this, [this, duration]() {
+        emit durationChanged(duration);
+    }, Qt::QueuedConnection);
 }
 
 // 删除未使用的onStateChanged方法，使用handlePlaybackStateChanged替代
@@ -1512,7 +1523,10 @@ void AudioEngine::setAudioEngineType(AudioTypes::AudioEngineType type)
         return; // 没有变化，直接返回
     }
     
-
+    qDebug() << "AudioEngine: 切换音频引擎类型从" 
+             << (m_audioEngineType == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg")
+             << "到"
+             << (type == AudioTypes::AudioEngineType::QMediaPlayer ? "QMediaPlayer" : "FFmpeg");
     
     // 停止当前播放
     bool wasPlaying = (m_state == AudioTypes::AudioState::Playing);
@@ -1522,32 +1536,98 @@ void AudioEngine::setAudioEngineType(AudioTypes::AudioEngineType type)
     if (wasPlaying) {
         currentSong = m_playlist.isEmpty() ? Song() : m_playlist.at(m_currentIndex);
         currentPosition = m_position;
-        stop(); // 停止当前播放
+        
+        // 安全停止当前播放
+        try {
+            stop();
+        } catch (const std::exception& e) {
+            qCritical() << "AudioEngine: 停止播放时发生异常:" << e.what();
+        } catch (...) {
+            qCritical() << "AudioEngine: 停止播放时发生未知异常";
+        }
     }
     
     // 更新引擎类型
     m_audioEngineType = type;
     
     // 保存设置到配置文件
-    AppConfig* config = AppConfig::instance();
-    config->setValue("audio/engine_type", static_cast<int>(type));
+    try {
+        AppConfig* config = AppConfig::instance();
+        config->setValue("audio/engine_type", static_cast<int>(type));
+    } catch (const std::exception& e) {
+        qWarning() << "AudioEngine: 保存音频引擎设置失败:" << e.what();
+    }
     
     // 发出信号通知变化
     emit audioEngineTypeChanged(type);
     
     // 如果之前在播放，使用新引擎继续播放
     if (wasPlaying && currentSong.isValid()) {
+        // 延迟重新开始播放，确保引擎切换完成
         QTimer::singleShot(100, this, [this, currentSong, currentPosition]() {
-            play();
-            if (currentPosition > 1000) { // 如果位置大于1秒，则跳转
-                QTimer::singleShot(500, this, [this, currentPosition]() {
-                    seek(currentPosition);
-                });
+            try {
+                QMutexLocker locker(&m_mutex);
+                
+                if (m_audioEngineType == AudioTypes::AudioEngineType::FFmpeg) {
+                    // FFmpeg模式：确保解码器已初始化
+                    if (!m_ffmpegDecoder) {
+                        initializeFFmpegDecoder();
+                    }
+                    
+                    if (m_ffmpegDecoder && m_ffmpegDecoder->openFile(currentSong.filePath())) {
+                        // 跳转到之前的位置
+                        if (currentPosition > 0) {
+                            m_ffmpegDecoder->seekTo(currentPosition);
+                        }
+                        
+                        if (m_ffmpegDecoder->startDecoding()) {
+                            m_state = AudioTypes::AudioState::Playing;
+                            m_userPaused = false;
+                            emit stateChanged(m_state);
+                            
+                            if (m_positionTimer) {
+                                m_positionTimer->start();
+                            }
+                            
+                            logPlaybackEvent("FFmpeg引擎切换后继续播放", currentSong.title());
+                            return;
+                        }
+                    }
+                    
+                    // FFmpeg播放失败，回退到QMediaPlayer
+                    qWarning() << "AudioEngine: FFmpeg播放失败，回退到QMediaPlayer";
+                    m_audioEngineType = AudioTypes::AudioEngineType::QMediaPlayer;
+                    emit audioEngineTypeChanged(m_audioEngineType);
+                }
+                
+                // 使用QMediaPlayer播放
+                if (m_player) {
+                    m_player->setSource(QUrl::fromLocalFile(currentSong.filePath()));
+                    m_player->play();
+                    
+                    // 跳转到之前的位置
+                    if (currentPosition > 0) {
+                        m_player->setPosition(currentPosition);
+                    }
+                    
+                    m_state = AudioTypes::AudioState::Playing;
+                    m_userPaused = false;
+                    emit stateChanged(m_state);
+                    
+                    if (m_positionTimer) {
+                        m_positionTimer->start();
+                    }
+                    
+                    logPlaybackEvent("QMediaPlayer引擎切换后继续播放", currentSong.title());
+                }
+                
+            } catch (const std::exception& e) {
+                qCritical() << "AudioEngine: 引擎切换后重新播放异常:" << e.what();
+            } catch (...) {
+                qCritical() << "AudioEngine: 引擎切换后重新播放未知异常";
             }
         });
     }
-    
-
 }
 
 AudioTypes::AudioEngineType AudioEngine::getAudioEngineType() const
@@ -1674,52 +1754,78 @@ void AudioEngine::playWithQMediaPlayer(const Song& song)
 
 void AudioEngine::playWithFFmpeg(const Song& song)
 {
-    // 停止QMediaPlayer（如果正在播放）
-    if (m_player && m_player->playbackState() != QMediaPlayer::StoppedState) {
-        m_player->stop();
-    }
-    
-    // 确保FFmpeg解码器已初始化
-    if (!m_ffmpegDecoder) {
-        qWarning() << "AudioEngine: FFmpeg解码器未初始化，回退到QMediaPlayer";
-        playWithQMediaPlayer(song);
-        return;
-    }
-    
     try {
-        if (m_ffmpegDecoder->openFile(song.filePath())) {
-            // 应用当前的音效设置
-            m_ffmpegDecoder->setBalance(m_balance);
-            
-            if (m_ffmpegDecoder->startDecoding()) {
-                // FFmpeg解码器播放成功，设置状态
-                m_state = AudioTypes::AudioState::Playing;
-                m_userPaused = false;
-                emit stateChanged(m_state);
-                
-                if (m_positionTimer) {
-                    m_positionTimer->start();
-                }
-                
-                logPlaybackEvent("FFmpeg开始播放", song.title());
-                updateCurrentSong();
-                addToHistory(song);
-                
-                return;
-            } else {
-                qWarning() << "AudioEngine: FFmpegDecoder::startDecoding失败，回退到QMediaPlayer";
-            }
-        } else {
-            qWarning() << "AudioEngine: FFmpegDecoder::openFile失败，回退到QMediaPlayer";
+        QMutexLocker locker(&m_mutex);
+        
+        if (!m_ffmpegDecoder) {
+            initializeFFmpegDecoder();
         }
+        
+        if (!m_ffmpegDecoder) {
+            qCritical() << "AudioEngine: FFmpeg解码器初始化失败";
+            emit errorOccurred("FFmpeg解码器初始化失败");
+            return;
+        }
+        
+        // 停止当前播放
+        if (m_state == AudioTypes::AudioState::Playing) {
+            m_ffmpegDecoder->stopDecoding();
+        }
+        
+        // 打开文件
+        if (!m_ffmpegDecoder->openFile(song.filePath())) {
+            qCritical() << "AudioEngine: 无法打开文件:" << song.filePath();
+            emit errorOccurred("无法打开音频文件");
+            return;
+        }
+        
+        // 设置播放状态
+        m_state = AudioTypes::AudioState::Loading;
+        emit stateChanged(m_state);
+        
+        // 使用QueuedConnection确保在主线程中处理
+        QMetaObject::invokeMethod(this, [this, song]() {
+            try {
+                // 开始解码
+                if (m_ffmpegDecoder && m_ffmpegDecoder->startDecoding()) {
+                    m_state = AudioTypes::AudioState::Playing;
+                    m_userPaused = false;
+                    emit stateChanged(m_state);
+                    
+                    // 更新当前歌曲信息
+                    setCurrentSong(song);
+                    emit currentSongChanged(song);
+                    
+                    // 记录播放历史
+                    addToHistory(song);
+                    
+                    logPlaybackEvent("FFmpeg播放开始", song.title());
+                } else {
+                    qCritical() << "AudioEngine: FFmpeg解码启动失败";
+                    m_state = AudioTypes::AudioState::Error;
+                    emit stateChanged(m_state);
+                    emit errorOccurred("FFmpeg解码启动失败");
+                }
+            } catch (const std::exception& e) {
+                qCritical() << "AudioEngine: FFmpeg播放异常:" << e.what();
+                m_state = AudioTypes::AudioState::Error;
+                emit stateChanged(m_state);
+                emit errorOccurred(QString("FFmpeg播放异常: %1").arg(e.what()));
+            } catch (...) {
+                qCritical() << "AudioEngine: FFmpeg播放未知异常";
+                m_state = AudioTypes::AudioState::Error;
+                emit stateChanged(m_state);
+                emit errorOccurred("FFmpeg播放未知异常");
+            }
+        }, Qt::QueuedConnection);
+        
     } catch (const std::exception& e) {
-        qCritical() << "AudioEngine: FFmpegDecoder操作异常:" << e.what() << "，回退到QMediaPlayer";
+        qCritical() << "AudioEngine: playWithFFmpeg异常:" << e.what();
+        emit errorOccurred(QString("FFmpeg播放异常: %1").arg(e.what()));
     } catch (...) {
-        qCritical() << "AudioEngine: FFmpegDecoder操作未知异常，回退到QMediaPlayer";
+        qCritical() << "AudioEngine: playWithFFmpeg未知异常";
+        emit errorOccurred("FFmpeg播放未知异常");
     }
-    
-    // 如果FFmpeg播放失败，自动回退到QMediaPlayer
-    playWithQMediaPlayer(song);
 }
 
 // ==================== 缺失方法实现 ====================
@@ -1872,13 +1978,19 @@ void AudioEngine::onFFmpegAudioDataReady(const QVector<double>& levels)
 void AudioEngine::onFFmpegPositionChanged(qint64 position)
 {
     m_position = position;
-    emit positionChanged(position);
+    // 使用QueuedConnection确保在主线程中发送信号，避免阻塞
+    QMetaObject::invokeMethod(this, [this, position]() {
+        emit positionChanged(position);
+    }, Qt::QueuedConnection);
 }
 
 void AudioEngine::onFFmpegDurationChanged(qint64 duration)
 {
     m_duration = duration;
-    emit durationChanged(duration);
+    // 使用QueuedConnection确保在主线程中发送信号，避免阻塞
+    QMetaObject::invokeMethod(this, [this, duration]() {
+        emit durationChanged(duration);
+    }, Qt::QueuedConnection);
 }
 
 void AudioEngine::onFFmpegDecodingFinished()
@@ -1892,4 +2004,166 @@ void AudioEngine::onFFmpegErrorOccurred(const QString& error)
     emit errorOccurred(error);
     m_state = AudioTypes::AudioState::Error;
     emit stateChanged(m_state);
+}
+
+bool AudioEngine::isValid() const
+{
+    QMutexLocker locker(&m_mutex);
+    
+    // 检查基本组件是否有效
+    if (!m_player) {
+        return false;
+    }
+    
+    // 检查FFmpeg解码器（如果使用FFmpeg模式）
+    if (m_audioEngineType == AudioTypes::AudioEngineType::FFmpeg) {
+        if (!m_ffmpegDecoder) {
+            return false;
+        }
+    }
+    
+    // 检查播放列表
+    if (m_playlist.isEmpty()) {
+        return false;
+    }
+    
+    // 检查当前索引
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
+        return false;
+    }
+    
+    return true;
+}
+
+void AudioEngine::registerInterface(QObject* interface)
+{
+    if (!interface) {
+        return;
+    }
+    
+    QMutexLocker locker(&m_interfaceMutex);
+    m_connectedInterfaces.insert(interface);
+    
+    qDebug() << "AudioEngine: 注册界面" << interface->objectName() 
+             << "，当前连接界面数量:" << m_connectedInterfaces.size();
+}
+
+void AudioEngine::unregisterInterface(QObject* interface)
+{
+    if (!interface) {
+        return;
+    }
+    
+    QMutexLocker locker(&m_interfaceMutex);
+    m_connectedInterfaces.remove(interface);
+    
+    qDebug() << "AudioEngine: 注销界面" << interface->objectName() 
+             << "，当前连接界面数量:" << m_connectedInterfaces.size();
+}
+
+void AudioEngine::syncInterfaces()
+{
+    QMutexLocker locker(&m_interfaceMutex);
+    
+    if (m_connectedInterfaces.isEmpty()) {
+        return;
+    }
+    
+    // 防止递归调用
+    static bool isSyncing = false;
+    if (isSyncing) {
+        return;
+    }
+    isSyncing = true;
+    
+    // 使用单次定时器避免重复同步
+    static QTimer* syncTimer = nullptr;
+    if (!syncTimer) {
+        syncTimer = new QTimer();
+        syncTimer->setSingleShot(true);
+        syncTimer->setInterval(50); // 50ms防抖
+    }
+    
+    if (syncTimer->isActive()) {
+        isSyncing = false;
+        return;
+    }
+    
+    syncTimer->start();
+    
+    // 收集需要同步的状态
+    struct SyncState {
+        AudioTypes::AudioState state;
+        qint64 position;
+        qint64 duration;
+        int volume;
+        bool muted;
+        double balance;
+        AudioTypes::PlayMode playMode;
+        AudioTypes::AudioEngineType engineType;
+        Song currentSong;
+        int currentIndex;
+    };
+    
+    SyncState syncState;
+    {
+        QMutexLocker stateLocker(&m_mutex);
+        syncState.state = m_state;
+        syncState.position = m_position;
+        syncState.duration = m_duration;
+        syncState.volume = m_volume;
+        syncState.muted = m_muted;
+        syncState.balance = m_balance;
+        syncState.playMode = m_playMode;
+        syncState.engineType = m_audioEngineType;
+        syncState.currentIndex = m_currentIndex;
+        if (!m_playlist.isEmpty() && m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+            syncState.currentSong = m_playlist.at(m_currentIndex);
+        }
+    }
+    
+    // 同步到所有注册的界面
+    for (QObject* interface : m_connectedInterfaces) {
+        if (interface) {
+            // 使用QueuedConnection确保在主线程中处理
+            QMetaObject::invokeMethod(interface, [this, interface, syncState]() {
+                try {
+                    // 检查界面是否仍然有效
+                    if (!interface || interface->parent() == nullptr) {
+                        return;
+                    }
+                    
+                    // 发送状态更新信号（使用DirectConnection避免循环）
+                    QMetaObject::invokeMethod(this, [this, syncState]() {
+                        emit stateChanged(syncState.state);
+                        emit positionChanged(syncState.position);
+                        emit durationChanged(syncState.duration);
+                        emit volumeChanged(syncState.volume);
+                        emit mutedChanged(syncState.muted);
+                        emit balanceChanged(syncState.balance);
+                        emit playModeChanged(syncState.playMode);
+                        emit audioEngineTypeChanged(syncState.engineType);
+                        
+                        if (syncState.currentSong.isValid()) {
+                            emit currentSongChanged(syncState.currentSong);
+                            emit currentIndexChanged(syncState.currentIndex);
+                        }
+                    }, Qt::DirectConnection);
+                    
+                } catch (const std::exception& e) {
+                    qWarning() << "AudioEngine: 同步界面" << interface->objectName() << "时发生异常:" << e.what();
+                } catch (...) {
+                    qWarning() << "AudioEngine: 同步界面" << interface->objectName() << "时发生未知异常";
+                }
+            }, Qt::QueuedConnection);
+        }
+    }
+    
+    isSyncing = false;
+}
+
+QSet<QObject*> AudioEngine::getConnectedInterfaces()
+{
+    QMutexLocker locker(&m_interfaceMutex);
+    return m_connectedInterfaces;
 }

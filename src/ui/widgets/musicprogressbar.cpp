@@ -44,49 +44,77 @@ PreciseSlider::PreciseSlider(Qt::Orientation orientation, QWidget *parent)
 
 void PreciseSlider::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
-        QPoint relativePos = mapFromParent(event->pos());
-        updatePositionFromMouse(relativePos);
-        event->accept();
-    } else {
-        QSlider::mousePressEvent(event);
+    try {
+        if (event->button() == Qt::LeftButton) {
+            QPoint relativePos = mapFromParent(event->pos());
+            updatePositionFromMouse(relativePos);
+            event->accept();
+        } else {
+            QSlider::mousePressEvent(event);
+        }
+    } catch (const std::exception& e) {
+        qCritical() << "PreciseSlider: mousePressEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "PreciseSlider: mousePressEvent未知异常";
+        event->ignore();
     }
 }
 
 void PreciseSlider::mouseMoveEvent(QMouseEvent *event)
 {
-    if (event->buttons() & Qt::LeftButton) {
-        if (!m_isDragging) {
-            m_isDragging = true;
+    try {
+        if (event->buttons() & Qt::LeftButton) {
+            if (!m_isDragging) {
+                m_isDragging = true;
+            }
+            
+            QPoint relativePos = mapFromParent(event->pos());
+            qint64 targetPosition = positionFromMouseX(relativePos.x());
+            m_dragPreviewPosition = targetPosition;
+            update();
+            event->accept();
+            return;
         }
         
-        QPoint relativePos = mapFromParent(event->pos());
-        qint64 targetPosition = positionFromMouseX(relativePos.x());
-        m_dragPreviewPosition = targetPosition;
-        update();
-        event->accept();
-        return;
+        QSlider::mouseMoveEvent(event);
+    } catch (const std::exception& e) {
+        qCritical() << "PreciseSlider: mouseMoveEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "PreciseSlider: mouseMoveEvent未知异常";
+        event->ignore();
     }
-    
-    QSlider::mouseMoveEvent(event);
 }
 
 void PreciseSlider::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
-        if (m_isDragging) {
-            QPoint relativePos = mapFromParent(event->pos());
-            qint64 finalPosition = positionFromMouseX(relativePos.x());
-            emit preciseSeekRequested(finalPosition);
+    try {
+        if (event->button() == Qt::LeftButton) {
+            if (m_isDragging) {
+                QPoint relativePos = mapFromParent(event->pos());
+                qint64 finalPosition = positionFromMouseX(relativePos.x());
+                
+                // 使用QueuedConnection确保信号在主线程中处理
+                QMetaObject::invokeMethod(this, [this, finalPosition]() {
+                    emit preciseSeekRequested(finalPosition);
+                }, Qt::QueuedConnection);
+                
+                m_isDragging = false;
+                m_dragPreviewPosition = -1;
+                update();
+            }
             
-            m_isDragging = false;
-            m_dragPreviewPosition = -1;
-            update();
+            event->accept();
+        } else {
+            QSlider::mouseReleaseEvent(event);
         }
-        
-        event->accept();
-    } else {
-        QSlider::mouseReleaseEvent(event);
+    } catch (const std::exception& e) {
+        qCritical() << "PreciseSlider: mouseReleaseEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "PreciseSlider: mouseReleaseEvent未知异常";
+        event->ignore();
     }
 }
 
@@ -482,40 +510,64 @@ void MusicProgressBar::reset()
 
 void MusicProgressBar::mousePressEvent(QMouseEvent *event)
 {
-    // 检查点击是否在滑块区域内
-    if (m_slider->geometry().contains(event->pos())) {
-        // 直接调用PreciseSlider的鼠标事件处理
-        m_slider->mousePressEvent(event);
-        event->accept();
-    } else {
-        QWidget::mousePressEvent(event);
+    try {
+        // 检查点击是否在滑块区域内
+        if (m_slider && m_slider->geometry().contains(event->pos())) {
+            // 直接调用PreciseSlider的鼠标事件处理
+            m_slider->mousePressEvent(event);
+            event->accept();
+        } else {
+            QWidget::mousePressEvent(event);
+        }
+    } catch (const std::exception& e) {
+        qCritical() << "MusicProgressBar: mousePressEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "MusicProgressBar: mousePressEvent未知异常";
+        event->ignore();
     }
 }
 
 void MusicProgressBar::mouseMoveEvent(QMouseEvent *event)
 {
-    // 只处理悬停提示
-    if (!m_userInteracting) {
-        updateTooltip(event->pos());
+    try {
+        // 只处理悬停提示
+        if (!m_userInteracting) {
+            updateTooltip(event->pos());
+        }
+        
+        // 如果鼠标在滑块区域内，传递给PreciseSlider
+        if (m_slider && m_slider->geometry().contains(event->pos())) {
+            m_slider->mouseMoveEvent(event);
+        }
+        
+        QWidget::mouseMoveEvent(event);
+    } catch (const std::exception& e) {
+        qCritical() << "MusicProgressBar: mouseMoveEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "MusicProgressBar: mouseMoveEvent未知异常";
+        event->ignore();
     }
-    
-    // 如果鼠标在滑块区域内，传递给PreciseSlider
-    if (m_slider->geometry().contains(event->pos())) {
-        m_slider->mouseMoveEvent(event);
-    }
-    
-    QWidget::mouseMoveEvent(event);
 }
 
 void MusicProgressBar::mouseReleaseEvent(QMouseEvent *event)
 {
-    // 检查释放是否在滑块区域内
-    if (m_slider->geometry().contains(event->pos())) {
-        // 直接调用PreciseSlider的鼠标事件处理
-        m_slider->mouseReleaseEvent(event);
-        event->accept();
-    } else {
-        QWidget::mouseReleaseEvent(event);
+    try {
+        // 检查释放是否在滑块区域内
+        if (m_slider && m_slider->geometry().contains(event->pos())) {
+            // 直接调用PreciseSlider的鼠标事件处理
+            m_slider->mouseReleaseEvent(event);
+            event->accept();
+        } else {
+            QWidget::mouseReleaseEvent(event);
+        }
+    } catch (const std::exception& e) {
+        qCritical() << "MusicProgressBar: mouseReleaseEvent异常:" << e.what();
+        event->ignore();
+    } catch (...) {
+        qCritical() << "MusicProgressBar: mouseReleaseEvent未知异常";
+        event->ignore();
     }
 }
 

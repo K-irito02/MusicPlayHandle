@@ -8,6 +8,7 @@
 #include <QVector>
 #include <QPixmap>
 #include <QHBoxLayout>
+#include <QMouseEvent>
 #include "../../audio/audiotypes.h"
 
 namespace Ui {
@@ -78,6 +79,11 @@ public:
     
     // 事件处理
     void showEvent(QShowEvent* event) override;
+    
+    // 鼠标事件处理 - 新增：线程安全保护
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
 
 signals:
     void playPauseClicked();
@@ -87,6 +93,7 @@ signals:
     void volumeChanged(int volume);
     void balanceChanged(int balance);
     void positionChanged(qint64 position);
+    void durationChanged(qint64 duration);
     void muteToggled(bool muted);
     void displayModeClicked();
     void visualizationTypeClicked();

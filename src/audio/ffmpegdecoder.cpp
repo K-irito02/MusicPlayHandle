@@ -1,6 +1,7 @@
 #include "ffmpegdecoder.h"
 #include <QFileInfo>
 #include <QtMath>
+#include <QDateTime>
 #include <cstdint>
 
 FFmpegDecoder::FFmpegDecoder(QObject* parent)
@@ -59,7 +60,7 @@ bool FFmpegDecoder::initialize()
         
         connect(m_decodeTimer, &QTimer::timeout, this, &FFmpegDecoder::decodeLoop);
         connect(m_decodeThread, &QThread::started, [this]() {
-            m_decodeTimer->start(10); // 10ms间隔，100fps
+            m_decodeTimer->start(20); // 改为20ms间隔，50fps，平衡性能和响应性
         });
         return true;
         
@@ -152,10 +153,12 @@ bool FFmpegDecoder::openFile(const QString& filePath)
             return false;
         }
         
-        if (m_formatContext->duration != AV_NOPTS_VALUE) {
-            m_duration = m_formatContext->duration / 1000; // 转换为毫秒
-        } else {
-            m_duration = 0;
+        if (m_formatContext) {
+            m_duration = m_formatContext->duration * 1000 / AV_TIME_BASE;
+            // 使用QueuedConnection确保信号在主线程中处理
+            QMetaObject::invokeMethod(this, [this]() {
+                emit durationChanged(m_duration);
+            }, Qt::QueuedConnection);
         }
         
         m_duration = 0;
@@ -201,25 +204,48 @@ bool FFmpegDecoder::startDecoding()
         QMutexLocker locker(&m_mutex);
         
         if (!m_formatContext) {
+            qWarning() << "FFmpegDecoder: 格式上下文未初始化";
             return false;
         }
         
         if (m_isDecoding.loadAcquire()) {
+            qDebug() << "FFmpegDecoder: 已经在解码中";
             return true;
+        }
+        
+        // 确保音频输出设备已正确设置
+        if (!m_audioSink || !m_audioDevice) {
+            qWarning() << "FFmpegDecoder: 音频输出设备未初始化，尝试重新设置";
+            if (!setupAudioOutput()) {
+                qCritical() << "FFmpegDecoder: 无法设置音频输出设备";
+                return false;
+            }
         }
         
         m_isDecoding.storeRelease(1);
         m_isEndOfFile = false;
         
-        if (m_decodeThread && !m_decodeThread->isRunning()) {
-            m_decodeThread->start();
+        // 确保解码线程安全启动
+        if (m_decodeThread) {
+            if (!m_decodeThread->isRunning()) {
+                m_decodeThread->start();
+                qDebug() << "FFmpegDecoder: 解码线程已启动";
+            }
+        } else {
+            qCritical() << "FFmpegDecoder: 解码线程未初始化";
+            m_isDecoding.storeRelease(0);
+            return false;
         }
         
         return true;
         
     } catch (const std::exception& e) {
+        qCritical() << "FFmpegDecoder: startDecoding异常:" << e.what();
+        m_isDecoding.storeRelease(0);
         return false;
     } catch (...) {
+        qCritical() << "FFmpegDecoder: startDecoding未知异常";
+        m_isDecoding.storeRelease(0);
         return false;
     }
 }
@@ -233,15 +259,28 @@ void FFmpegDecoder::stopDecoding()
             return;
         }
         
+        qDebug() << "FFmpegDecoder: 停止解码";
         m_isDecoding.storeRelease(0);
         
+        // 安全停止解码线程
         if (m_decodeThread && m_decodeThread->isRunning()) {
             m_decodeThread->quit();
-            m_decodeThread->wait();
+            if (!m_decodeThread->wait(3000)) { // 等待3秒
+                qWarning() << "FFmpegDecoder: 解码线程未能在3秒内停止，强制终止";
+                m_decodeThread->terminate();
+                m_decodeThread->wait();
+            }
+        }
+        
+        // 停止音频输出
+        if (m_audioSink) {
+            m_audioSink->stop();
         }
         
     } catch (const std::exception& e) {
+        qCritical() << "FFmpegDecoder: stopDecoding异常:" << e.what();
     } catch (...) {
+        qCritical() << "FFmpegDecoder: stopDecoding未知异常";
     }
 }
 
@@ -256,22 +295,22 @@ void FFmpegDecoder::seekTo(qint64 position)
         
         m_levelBuffer.clear();
         
-        int64_t timestamp = position * 1000; // 转换为微秒
-        int ret = av_seek_frame(m_formatContext, m_audioStreamIndex, timestamp, AVSEEK_FLAG_BACKWARD);
-        if (ret >= 0) {
-            if (m_codecContext) {
+        if (m_formatContext && m_codecContext) {
+            int64_t targetTime = position * AV_TIME_BASE / 1000;
+            if (av_seek_frame(m_formatContext, -1, targetTime, AVSEEK_FLAG_BACKWARD) >= 0) {
                 avcodec_flush_buffers(m_codecContext);
+                m_currentPosition = position;
+                // 使用QueuedConnection确保信号在主线程中处理
+                QMetaObject::invokeMethod(this, [this, position]() {
+                    emit positionChanged(position);
+                }, Qt::QueuedConnection);
             }
-            
-            m_currentPosition = position;
-            emit positionChanged(m_currentPosition);
-        } else {
-            char errorBuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errorBuf, AV_ERROR_MAX_STRING_SIZE);
         }
         
     } catch (const std::exception& e) {
+        qWarning() << "FFmpegDecoder: seekTo异常:" << e.what();
     } catch (...) {
+        qWarning() << "FFmpegDecoder: seekTo未知异常";
     }
 }
 
@@ -326,18 +365,37 @@ void FFmpegDecoder::decodeLoop()
         return;
     }
     
-    {
+    try {
+        // 减少锁的持有时间，只在必要时加锁
         QMutexLocker locker(&m_mutex);
         
         if (!m_formatContext || !m_codecContext) {
+            qWarning() << "FFmpegDecoder: 解码器上下文未初始化";
             return;
         }
+        
+        if (!m_packet) {
+            qWarning() << "FFmpegDecoder: 数据包未初始化";
+            return;
+        }
+        
+        // 临时释放锁，避免长时间持有
+        locker.unlock();
         
         int ret = av_read_frame(m_formatContext, m_packet);
         if (ret < 0) {
             if (ret == AVERROR_EOF) {
+                locker.relock();
                 m_isEndOfFile = true;
-                emit decodingFinished();
+                qDebug() << "FFmpegDecoder: 到达文件末尾";
+                // 使用QueuedConnection确保信号在主线程中处理
+                QMetaObject::invokeMethod(this, [this]() {
+                    emit decodingFinished();
+                }, Qt::QueuedConnection);
+            } else {
+                char errorMsg[AV_ERROR_MAX_STRING_SIZE];
+                av_strerror(ret, errorMsg, AV_ERROR_MAX_STRING_SIZE);
+                qWarning() << "FFmpegDecoder: 读取帧失败:" << errorMsg;
             }
             return;
         }
@@ -349,47 +407,78 @@ void FFmpegDecoder::decodeLoop()
         
         ret = avcodec_send_packet(m_codecContext, m_packet);
         if (ret < 0) {
+            char errorMsg[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(ret, errorMsg, AV_ERROR_MAX_STRING_SIZE);
+            qWarning() << "FFmpegDecoder: 发送数据包失败:" << errorMsg;
             av_packet_unref(m_packet);
             return;
         }
         
         int frameCount = 0;
-        while (true) {
+        while (m_isDecoding.loadAcquire()) {
             ret = avcodec_receive_frame(m_codecContext, m_inputFrame);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
                 break;
             } else if (ret < 0) {
+                char errorMsg[AV_ERROR_MAX_STRING_SIZE];
+                av_strerror(ret, errorMsg, AV_ERROR_MAX_STRING_SIZE);
+                qWarning() << "FFmpegDecoder: 接收帧失败:" << errorMsg;
                 break;
             }
             
             frameCount++;
             
             AVFrame* frameCopy = av_frame_alloc();
-            av_frame_ref(frameCopy, m_inputFrame);
+            if (!frameCopy) {
+                qWarning() << "FFmpegDecoder: 无法分配帧副本";
+                break;
+            }
             
+            ret = av_frame_ref(frameCopy, m_inputFrame);
+            if (ret < 0) {
+                qWarning() << "FFmpegDecoder: 无法引用帧";
+                av_frame_free(&frameCopy);
+                break;
+            }
+            
+            // 更新位置信息
             if (m_inputFrame->pts != AV_NOPTS_VALUE) {
                 qint64 newPosition = m_inputFrame->pts * av_q2d(m_formatContext->streams[m_audioStreamIndex]->time_base) * 1000;
                 if (newPosition != m_currentPosition) {
                     m_currentPosition = newPosition;
-                    emit positionChanged(m_currentPosition);
+                    // 使用QueuedConnection确保信号在主线程中处理，并限制发送频率
+                    static qint64 lastEmitTime = 0;
+                    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+                    if (currentTime - lastEmitTime > 50) { // 改为50ms间隔，确保进度条流畅更新
+                        lastEmitTime = currentTime;
+                        QMetaObject::invokeMethod(this, [this, newPosition]() {
+                            emit positionChanged(newPosition);
+                        }, Qt::QueuedConnection);
+                    }
                 }
             }
             
-            locker.unlock();
+            // 处理音频帧
             processAudioFrame(frameCopy);
             av_frame_free(&frameCopy);
-            locker.relock();
-        }
-        
-        if (frameCount > 0 && m_audioFormat.sampleRate() > 0) {
-            int samplesPerFrame = frameCount * m_audioFormat.channelCount();
-            int delayMs = (samplesPerFrame * 1000) / m_audioFormat.sampleRate();
-            if (delayMs > 0 && delayMs < 50) {
-                QThread::msleep(delayMs);
+            
+            // 限制每轮解码的帧数，避免长时间占用CPU
+            if (frameCount >= 5) {
+                break;
             }
         }
         
+        // 添加适当的延迟，避免过度占用CPU
+        if (frameCount > 0) {
+            QThread::msleep(5); // 减少到5ms延迟，提高响应性
+        }
+        
         av_packet_unref(m_packet);
+        
+    } catch (const std::exception& e) {
+        qCritical() << "FFmpegDecoder: decodeLoop异常:" << e.what();
+    } catch (...) {
+        qCritical() << "FFmpegDecoder: decodeLoop未知异常";
     }
 }
 
@@ -578,9 +667,7 @@ void FFmpegDecoder::processAudioFrame(AVFrame* frame)
         int samples = swr_convert(m_swrContext, m_outputFrame->data, outSamples,
                                  (const uint8_t**)frame->data, frame->nb_samples);
         
-        if (samples > 0) {
-            qDebug() << "FFmpegDecoder: 重采样成功，样本数:" << samples;
-            
+        if (samples > 0) {     
             // 应用平衡控制到音频数据（仅对立体声有效）
             if (outputChannels == 2) {
                 if (outputSampleFormat == AV_SAMPLE_FMT_FLT) {
@@ -635,8 +722,6 @@ void FFmpegDecoder::processAudioFrame(AVFrame* frame)
                         audioData[i * 2 + 1] = static_cast<int16_t>(rightFloat * 32767.0f);
                     }
                 }
-                
-                qDebug() << "FFmpegDecoder: 平衡控制应用完成，平衡值:" << m_balance;
             }
             
             // 计算音频数据大小
@@ -658,7 +743,6 @@ void FFmpegDecoder::processAudioFrame(AVFrame* frame)
             
             int dataSize = samples * outputChannels * bytesPerSample;
             QByteArray audioBytes((const char*)m_outputFrame->data[0], dataSize);
-            qDebug() << "FFmpegDecoder: 音频数据写入大小:" << audioBytes.size() << "字节，采样数:" << samples << "，声道数:" << outputChannels;
             writeAudioData(audioBytes);
             
             // 计算音频电平用于VU表
@@ -673,7 +757,7 @@ void FFmpegDecoder::processAudioFrame(AVFrame* frame)
                 }
                 calculateLevels(floatSamples.data(), samples, outputChannels);
             }
-            qDebug() << "FFmpegDecoder: VU表电平计算完成";
+            
         } else {
             qWarning() << "FFmpegDecoder: 重采样失败，样本数:" << samples;
         }
@@ -714,16 +798,20 @@ void FFmpegDecoder::calculateLevels(const float* samples, int frameCount, int ch
     leftRMS = sqrt(leftRMS / frameCount);
     rightRMS = sqrt(rightRMS / frameCount);
     
-    // 限制在0-1范围内
-    leftRMS = qBound(0.0, leftRMS, 1.0);
-    rightRMS = qBound(0.0, rightRMS, 1.0);
-    
-    // 更新电平
-    m_currentLevels[0] = leftRMS;
-    m_currentLevels[1] = rightRMS;
-    
-    // 发送信号
-    emit audioDataReady(m_currentLevels);
+    // 限制VU表信号发送频率
+    static qint64 lastVUEmitTime = 0;
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    if (currentTime - lastVUEmitTime > 100) { // 改为100ms间隔，确保VU表正常显示
+        lastVUEmitTime = currentTime;
+        
+        m_currentLevels[0] = leftRMS;
+        m_currentLevels[1] = rightRMS;
+        
+        // 发送音频数据信号
+        QMetaObject::invokeMethod(this, [this]() {
+            emit audioDataReady(m_currentLevels);
+        }, Qt::QueuedConnection);
+    }
 }
 
 void FFmpegDecoder::cleanupFFmpeg()
@@ -779,54 +867,91 @@ void FFmpegDecoder::resetState()
 
 bool FFmpegDecoder::setupAudioOutput()
 {
-    QMediaDevices mediaDevices;
-    QList<QAudioDevice> audioOutputs = mediaDevices.audioOutputs();
-    
-    if (audioOutputs.isEmpty()) {
-        return false;
-    }
-    
-    QAudioDevice defaultDevice = audioOutputs.first();
-    m_audioFormat = defaultDevice.preferredFormat();
-    
-    if (!defaultDevice.isFormatSupported(m_audioFormat)) {
-        m_audioFormat.setSampleRate(44100);
-        m_audioFormat.setChannelCount(2);
-        m_audioFormat.setSampleFormat(QAudioFormat::Int16);
+    try {
+        // 先清理旧的音频输出
+        cleanupAudioOutput();
         
-        if (!defaultDevice.isFormatSupported(m_audioFormat)) {
+        QMediaDevices mediaDevices;
+        QList<QAudioDevice> audioOutputs = mediaDevices.audioOutputs();
+        
+        if (audioOutputs.isEmpty()) {
+            qCritical() << "FFmpegDecoder: 没有可用的音频输出设备";
             return false;
         }
-    }
-    
-    m_audioSink = new QAudioSink(defaultDevice, m_audioFormat, this);
-    
-    if (!m_audioSink) {
+        
+        QAudioDevice defaultDevice = audioOutputs.first();
+        qDebug() << "FFmpegDecoder: 使用音频设备:" << defaultDevice.description();
+        
+        m_audioFormat = defaultDevice.preferredFormat();
+        
+        if (!defaultDevice.isFormatSupported(m_audioFormat)) {
+            qWarning() << "FFmpegDecoder: 首选格式不支持，使用默认格式";
+            m_audioFormat.setSampleRate(44100);
+            m_audioFormat.setChannelCount(2);
+            m_audioFormat.setSampleFormat(QAudioFormat::Int16);
+            
+            if (!defaultDevice.isFormatSupported(m_audioFormat)) {
+                qCritical() << "FFmpegDecoder: 默认格式也不支持";
+                return false;
+            }
+        }
+        
+        qDebug() << "FFmpegDecoder: 音频格式 - 采样率:" << m_audioFormat.sampleRate() 
+                 << "声道数:" << m_audioFormat.channelCount() 
+                 << "格式:" << m_audioFormat.sampleFormat();
+        
+        m_audioSink = new QAudioSink(defaultDevice, m_audioFormat, this);
+        
+        if (!m_audioSink) {
+            qCritical() << "FFmpegDecoder: 无法创建QAudioSink";
+            return false;
+        }
+        
+        m_audioSink->setBufferSize(65536);
+        m_audioSink->setVolume(1.0);
+        
+        m_audioDevice = m_audioSink->start();
+        
+        if (!m_audioDevice) {
+            qCritical() << "FFmpegDecoder: 无法启动音频设备";
+            delete m_audioSink;
+            m_audioSink = nullptr;
+            return false;
+        }
+        
+        qDebug() << "FFmpegDecoder: 音频输出设置成功";
+        return true;
+        
+    } catch (const std::exception& e) {
+        qCritical() << "FFmpegDecoder: setupAudioOutput异常:" << e.what();
+        cleanupAudioOutput();
+        return false;
+    } catch (...) {
+        qCritical() << "FFmpegDecoder: setupAudioOutput未知异常";
+        cleanupAudioOutput();
         return false;
     }
-    
-    m_audioSink->setBufferSize(65536);
-    m_audioSink->setVolume(1.0);
-    
-    m_audioDevice = m_audioSink->start();
-    
-    if (!m_audioDevice) {
-        return false;
-    }
-    
-    return true;
 }
 
 void FFmpegDecoder::cleanupAudioOutput()
 {
-    if (m_audioSink) {
-        m_audioSink->stop();
-        delete m_audioSink;
-        m_audioSink = nullptr;
+    try {
+        if (m_audioSink) {
+            m_audioSink->stop();
+            delete m_audioSink;
+            m_audioSink = nullptr;
+        }
+        
+        m_audioDevice = nullptr;
+        m_audioBuffer.clear();
+        
+        qDebug() << "FFmpegDecoder: 音频输出清理完成";
+        
+    } catch (const std::exception& e) {
+        qCritical() << "FFmpegDecoder: cleanupAudioOutput异常:" << e.what();
+    } catch (...) {
+        qCritical() << "FFmpegDecoder: cleanupAudioOutput未知异常";
     }
-    
-    m_audioDevice = nullptr;
-    m_audioBuffer.clear();
 }
 
 void FFmpegDecoder::writeAudioData(const QByteArray& data)
