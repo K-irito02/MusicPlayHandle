@@ -33,7 +33,9 @@ include_directories(
 set(CORE_SOURCES
     core/observer.h
     core/performancemanager.h
+    core/performancemanager.cpp
     core/resourcemanager.h
+    core/resourcemanager.cpp
     core/appconfig.cpp
     core/logger.cpp
     core/objectpool.cpp
@@ -54,7 +56,7 @@ set(AUDIO_SOURCES
 # UI组件源文件
 set(UI_SOURCES
     ui/dialogs/improvedplayinterface.h
-    ui/dialogs/PlayInterface.cpp
+    ui/dialogs/improvedplayinterface.cpp
     ui/dialogs/AddSongDialog.cpp
     ui/dialogs/CreateTagDialog.cpp
     ui/dialogs/ManageTagDialog.cpp
@@ -64,6 +66,7 @@ set(UI_SOURCES
 # 线程组件源文件
 set(THREADING_SOURCES
     threading/threadpoolmanager.h
+    threading/threadpoolmanager.cpp
     threading/audioworkerthread.cpp
     threading/mainthreadmanager.h
 )
