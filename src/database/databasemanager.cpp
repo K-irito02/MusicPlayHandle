@@ -1,5 +1,6 @@
 #include "databasemanager.h"
 #include <QDir>
+#include <QFile>
 #include <QStandardPaths>
 #include <QMutexLocker>
 #include <QDebug>
@@ -122,7 +123,16 @@ QSqlDatabase DatabaseManager::database() const
     return QSqlDatabase::database(CONNECTION_NAME);
 }
 
-QSqlQuery DatabaseManager::executeQuery(const QString& queryStr)
+void DatabaseManager::closeDatabase()
+{
+    if (m_initialized) {
+        m_database.close();
+        m_initialized = false;
+        qDebug() << "DatabaseManager::closeDatabase() - 数据库已关闭";
+    }
+}
+
+QSqlQuery DatabaseManager::executeQuery(const QString& sql)
 {
     // 检查数据库连接状态
     if (!isValid()) {
@@ -131,12 +141,93 @@ QSqlQuery DatabaseManager::executeQuery(const QString& queryStr)
     }
     
     QSqlQuery query(database());
-    if (!query.exec(queryStr)) {
-        logError("查询执行失败: " + query.lastError().text() + " SQL: " + queryStr);
+    if (!query.exec(sql)) {
+        logError("查询执行失败: " + query.lastError().text() + " SQL: " + sql);
         // 返回一个无效的查询对象
         return QSqlQuery();
     }
     return query;
+}
+
+QSqlQuery DatabaseManager::prepareQuery(const QString& sql)
+{
+    if (!isValid()) {
+        logError("预处理查询失败: 数据库连接无效");
+        return QSqlQuery();
+    }
+    
+    QSqlQuery query(database());
+    if (!query.prepare(sql)) {
+        logError("预处理查询失败: " + query.lastError().text() + " SQL: " + sql);
+        return QSqlQuery();
+    }
+    return query;
+}
+
+bool DatabaseManager::tableExists(const QString& tableName) const
+{
+    if (!isValid()) {
+        return false;
+    }
+    return database().tables().contains(tableName);
+}
+
+bool DatabaseManager::optimizeDatabase()
+{
+    if (!isValid()) {
+        return false;
+    }
+    
+    // 执行SQLite的VACUUM命令来优化数据库
+    QSqlQuery query(database());
+    if (!query.exec("VACUUM")) {
+        logError("数据库优化失败: " + query.lastError().text());
+        return false;
+    }
+    return true;
+}
+
+bool DatabaseManager::backupDatabase(const QString& backupPath)
+{
+    if (!isValid()) {
+        return false;
+    }
+    
+    // 关闭当前连接
+    database().close();
+    
+    // 复制数据库文件
+    if (!QFile::copy(database().databaseName(), backupPath)) {
+        logError("数据库备份失败: 无法复制数据库文件");
+        database().open(); // 重新打开数据库
+        return false;
+    }
+    
+    // 重新打开数据库
+    if (!database().open()) {
+        logError("数据库备份后重新打开失败: " + database().lastError().text());
+        return false;
+    }
+    
+    return true;
+}
+
+QString DatabaseManager::getDatabaseVersion() const
+{
+    if (!isValid()) {
+        return QString();
+    }
+    
+    QSqlQuery query(database());
+    if (!query.exec("SELECT sqlite_version()")) {
+        return QString();
+    }
+    
+    if (query.next()) {
+        return query.value(0).toString();
+    }
+    
+    return QString();
 }
 
 bool DatabaseManager::executeUpdate(const QString& queryStr)
@@ -155,17 +246,7 @@ bool DatabaseManager::executeUpdate(const QString& queryStr)
     return true;
 }
 
-void DatabaseManager::closeDatabase()
-{
-    // 先重置初始化标志
-    m_initialized = false;
-    
-    if (m_database.isOpen()) {
-        m_database.close();
-        qDebug() << "数据库连接已关闭";
-    }
-    QSqlDatabase::removeDatabase(CONNECTION_NAME);
-}
+
 
 bool DatabaseManager::createTables()
 {
@@ -542,4 +623,9 @@ void DatabaseManager::logError(const QString& error)
         QSqlQuery query(database());
         query.exec(logSQL);
     }
+}
+
+void DatabaseManager::close()
+{
+    closeDatabase();
 }

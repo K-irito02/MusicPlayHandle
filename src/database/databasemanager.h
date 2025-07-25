@@ -9,6 +9,7 @@
 #include <QString>
 #include <QStringList>
 #include <memory>
+#include "interfaces/idatabasemanager.h"
 
 /**
  * @brief 数据库管理器 - 简化版本
@@ -16,7 +17,7 @@
  * 提供基础的数据库连接、初始化和查询功能
  * 移除了复杂的事务管理和信号槽机制，专注于稳定性
  */
-class DatabaseManager : public QObject
+class DatabaseManager : public QObject, public IDatabaseManager
 {
     Q_OBJECT
 
@@ -31,45 +32,25 @@ public:
      * @param dbPath 数据库文件路径
      * @return 初始化是否成功
      */
-    bool initialize(const QString& dbPath);
+    // IDatabaseManager interface implementation
+    bool initialize(const QString& dbPath) override;
+    void close() override;
+    bool isConnected() const override { return isValid(); }
+    QSqlDatabase getDatabase() const override { return database(); }
+    bool createTables() override;
+    bool tableExists(const QString& tableName) const override;
+    QSqlQuery executeQuery(const QString& sql) override;
+    QSqlQuery prepareQuery(const QString& sql) override;
+    bool optimizeDatabase() override;
+    bool backupDatabase(const QString& backupPath) override;
+    QString getDatabaseVersion() const override;
+    QString getLastError() const override { return m_lastError; }
     
-    /**
-     * @brief 检查数据库是否已初始化且有效
-     */
+    // Additional public methods
     bool isInitialized() const { return m_initialized; }
-    
-    /**
-     * @brief 检查数据库连接是否有效
-     */
     bool isValid() const;
-    
-    /**
-     * @brief 获取数据库连接
-     */
     QSqlDatabase database() const;
-    
-    /**
-     * @brief 执行查询
-     * @param queryStr SQL查询语句
-     * @return 查询结果
-     */
-    QSqlQuery executeQuery(const QString& queryStr);
-    
-    /**
-     * @brief 执行更新操作（INSERT/UPDATE/DELETE）
-     * @param queryStr SQL语句
-     * @return 操作是否成功
-     */
     bool executeUpdate(const QString& queryStr);
-    
-    /**
-     * @brief 获取最后的错误信息
-     */
-    QString lastError() const { return m_lastError; }
-    
-    /**
-     * @brief 关闭数据库连接
-     */
     void closeDatabase();
 
 private:
@@ -79,11 +60,6 @@ private:
     // 禁用拷贝构造和赋值
     DatabaseManager(const DatabaseManager&) = delete;
     DatabaseManager& operator=(const DatabaseManager&) = delete;
-    
-    /**
-     * @brief 创建数据库表结构
-     */
-    bool createTables();
     
     /**
      * @brief 创建歌曲表

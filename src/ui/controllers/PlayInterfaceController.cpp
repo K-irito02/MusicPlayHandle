@@ -4,7 +4,7 @@
 // 定义静态常量
 const int PlayInterfaceController::UPDATE_INTERVAL = 100;  // ms
 
-PlayInterfaceController::PlayInterfaceController(PlayInterface* interface, QObject* parent)
+PlayInterfaceController::PlayInterfaceController(ImprovedPlayInterface* interface, QObject* parent)
     : QObject(parent)
     // 界面相关
     , m_interface(interface)
@@ -335,37 +335,37 @@ void PlayInterfaceController::setupConnections()
         // 连接界面信号
         if (m_interface) {
             // 播放控制信号
-            connect(m_interface, &PlayInterface::playPauseClicked, 
-                    this, &PlayInterfaceController::onPlayPauseClicked);
-            connect(m_interface, &PlayInterface::playModeClicked, 
-                    this, &PlayInterfaceController::onPlayModeClicked);
-            connect(m_interface, &PlayInterface::nextClicked, 
-                    this, &PlayInterfaceController::onNextClicked);
-            connect(m_interface, &PlayInterface::previousClicked, 
-                    this, &PlayInterfaceController::onPreviousClicked);
+                    connect(m_interface, &ImprovedPlayInterface::playPauseClicked,
+                this, &PlayInterfaceController::onPlayPauseClicked);
+        connect(m_interface, &ImprovedPlayInterface::playModeClicked,
+                this, &PlayInterfaceController::onPlayModeClicked);
+        connect(m_interface, &ImprovedPlayInterface::nextClicked,
+                this, &PlayInterfaceController::onNextClicked);
+        connect(m_interface, &ImprovedPlayInterface::previousClicked,
+                this, &PlayInterfaceController::onPreviousClicked);
             
             // 音频控制信号
-            connect(m_interface, &PlayInterface::volumeChanged, 
+            connect(m_interface, &ImprovedPlayInterface::volumeChanged, 
                     this, &PlayInterfaceController::onVolumeSliderChanged);
-            connect(m_interface, &PlayInterface::balanceChanged, 
+            connect(m_interface, &ImprovedPlayInterface::balanceChanged, 
                     this, &PlayInterfaceController::onBalanceSliderChanged);
-            connect(m_interface, &PlayInterface::positionChanged, 
+            connect(m_interface, &ImprovedPlayInterface::positionChanged, 
                     this, &PlayInterfaceController::onPositionSliderChanged);
             
             // 新增的进度条和音量控制信号
-            connect(m_interface, &PlayInterface::seekRequested, 
+            connect(m_interface, &ImprovedPlayInterface::seekRequested, 
                     this, &PlayInterfaceController::seekRequested);
-            connect(m_interface, &PlayInterface::volumeSliderChanged, 
+            connect(m_interface, &ImprovedPlayInterface::volumeSliderChanged, 
                     this, &PlayInterfaceController::volumeChanged);
-            connect(m_interface, &PlayInterface::seekRequested,
+            connect(m_interface, &ImprovedPlayInterface::seekRequested,
                     this, &PlayInterfaceController::seekRequested);
-            connect(m_interface, &PlayInterface::progressSliderPressed,
+            connect(m_interface, &ImprovedPlayInterface::progressSliderPressed,
                     [this]() { onProgressSliderPressed(); });
-            connect(m_interface, &PlayInterface::progressSliderReleased,
+            connect(m_interface, &ImprovedPlayInterface::progressSliderReleased,
                     [this]() { onProgressSliderReleased(); });
             
-            // 均衡器信号
-            connect(m_interface, &PlayInterface::equalizerChanged, 
+                        // 均衡器信号
+            connect(m_interface, &ImprovedPlayInterface::equalizerChanged,
                     this, &PlayInterfaceController::onEqualizerSliderChanged);
             
             logDebug("Connected interface signals");

@@ -83,6 +83,17 @@ protected:
      */
     virtual const DatabaseManager* dbManager() const;
 
+    /**
+     * @brief 关闭数据库连接
+     */
+    virtual void closeDatabase();
+
+    /**
+     * @brief 创建数据库表
+     * @return 是否创建成功
+     */
+    virtual bool createTables();
+
 private:
     DatabaseManager* m_dbManager;
 };

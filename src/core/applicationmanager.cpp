@@ -210,7 +210,7 @@ void ApplicationManager::initializeDatabase()
     
     qDebug() << "ApplicationManager::initializeDatabase() - 调用DatabaseManager::initialize";
     if (!m_databaseManager->initialize(dbPath)) {
-        QString error = QString("数据库初始化失败: %1").arg(m_databaseManager->lastError());
+        QString error = QString("数据库初始化失败: %1").arg(m_databaseManager->getLastError());
         qCritical() << "ApplicationManager::initializeDatabase() - 数据库初始化失败:" << error;
         throw std::runtime_error(error.toStdString());
     }

@@ -19,7 +19,7 @@ SOURCES += \
     src/ui/dialogs/AddSongDialog.cpp \
     src/ui/dialogs/CreateTagDialog.cpp \
     src/ui/dialogs/ManageTagDialog.cpp \
-    src/ui/dialogs/PlayInterface.cpp \
+    src/ui/dialogs/improvedplayinterface.cpp \
     src/ui/dialogs/SettingsDialog.cpp \
     src/ui/controllers/AddSongDialogController.cpp \
     src/ui/controllers/ManageTagDialogController.cpp \
@@ -37,6 +37,15 @@ SOURCES += \
     src/managers/playlistmanager.cpp \
     src/core/appconfig.cpp \
     src/core/logger.cpp \
+    src/core/performancemanager.cpp \
+    src/core/resourcemanager.cpp \
+    src/core/objectpool.cpp \
+    src/core/lazyloader.cpp \
+    src/core/structuredlogger.cpp \
+    src/core/tagconfiguration.cpp \
+    src/core/tagstrings.cpp \
+    src/core/servicecontainer.cpp \
+    # src/core/componentintegration.cpp \
     src/database/databasemanager.cpp \
     src/database/logdao.cpp \
     src/models/song.cpp \
@@ -46,8 +55,11 @@ SOURCES += \
     src/models/errorlog.cpp \
     src/models/systemlog.cpp \
     src/audio/audioengine.cpp \
+    src/audio/improvedaudioengine.cpp \
     src/audio/ffmpegdecoder.cpp \
     src/threading/audioworkerthread.cpp \
+    src/threading/threadpoolmanager.cpp \
+    src/threading/mainthreadmanager.cpp \
     src/core/applicationmanager.cpp
 
 HEADERS += \
@@ -58,8 +70,23 @@ HEADERS += \
     src/ui/widgets/musicprogressbar.h \
     src/ui/widgets/recentplaylistitem.h \
     src/threading/audioworkerthread.h \
+    src/threading/threadpoolmanager.h \
+    src/threading/mainthreadmanager.h \
     src/core/appconfig.h \
     src/core/logger.h \
+    src/core/performancemanager.h \
+    src/core/resourcemanager.h \
+    src/core/objectpool.h \
+    src/core/lazyloader.h \
+    src/core/structuredlogger.h \
+    src/core/tagconfiguration.h \
+    src/core/tagstrings.h \
+    src/core/servicecontainer.h \
+    # src/core/componentintegration.h \
+    src/core/observer.h \
+    src/core/cache.h \
+    src/core/constants.h \
+    src/core/result.h \
     src/database/databasemanager.h \
     src/database/basedao.h \
     src/database/songdao.h \
@@ -75,6 +102,7 @@ HEADERS += \
     src/models/systemlog.h \
     src/audio/audiotypes.h \
     src/audio/audioengine.h \
+    src/audio/improvedaudioengine.h \
     src/audio/ffmpegdecoder.h \
     src/core/applicationmanager.h \
     src/ui/controllers/MainWindowController.h \
@@ -83,7 +111,7 @@ HEADERS += \
     src/ui/controllers/ManageTagDialogController.h \
     src/ui/widgets/taglistitem.h \
     src/ui/dialogs/AddSongDialog.h \
-    src/ui/dialogs/PlayInterface.h \
+    src/ui/dialogs/improvedplayinterface.h \
     src/ui/dialogs/ManageTagDialog.h \
     src/ui/dialogs/SettingsDialog.h \
     src/ui/dialogs/CreateTagDialog.h

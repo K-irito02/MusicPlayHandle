@@ -1,6 +1,7 @@
 #include "mainwindowcontroller.h"
 #include "../../../mainwindow.h"
 #include "../../audio/audioengine.h"
+#include "../../audio/improvedaudioengine.h"
 #include "../../audio/audiotypes.h"
 #include "../../managers/tagmanager.h"
 #include "../../managers/playlistmanager.h"
@@ -20,7 +21,7 @@
 #include "playinterfacecontroller.h"
 #include "managetagdialogcontroller.h"
 #include "../dialogs/managetagdialog.h"
-#include "../dialogs/playinterface.h"
+#include "../dialogs/improvedplayinterface.h"
 #include "../dialogs/settingsdialog.h"
 #include "../widgets/taglistitem.h"
 #include "../widgets/musicprogressbar.h"
@@ -317,8 +318,12 @@ void MainWindowController::onActionPlayInterface()
             return;
         }
         
-        // 创建并显示PlayInterface（现在是独立窗口）
-        PlayInterface* dialog = new PlayInterface(m_mainWindow);
+            // 创建并显示改进的播放界面
+    ImprovedPlayInterface::InterfaceConfig config;
+    config.interfaceName = "MainWindowPlayInterface";
+    config.enablePerformanceMonitoring = true;
+    config.enableResourceLocking = true;
+    ImprovedPlayInterface* dialog = new ImprovedPlayInterface(m_mainWindow, config);
         dialog->setAttribute(Qt::WA_DeleteOnClose, true);
         
         // 确保AudioEngine已初始化
@@ -326,21 +331,18 @@ void MainWindowController::onActionPlayInterface()
             m_audioEngine = AudioEngine::instance();
         }
         
-        // 设置AudioEngine连接到PlayInterface
+        // 设置AudioEngine连接到ImprovedPlayInterface
         if (dialog && m_audioEngine) {
-            dialog->setAudioEngine(m_audioEngine);
-            logInfo("已为播放界面设置AudioEngine连接");
-            
-            // 也为控制器设置连接（双重保险）
-            if (dialog->getController()) {
-                dialog->getController()->setAudioEngine(m_audioEngine);
-                logInfo("已为播放界面控制器设置AudioEngine连接");
-            }
+            // 创建ImprovedAudioEngine的shared_ptr
+            ImprovedAudioEngine::AudioEngineConfig config;
+            auto improvedEngine = std::make_shared<ImprovedAudioEngine>(config);
+            dialog->setAudioEngine(improvedEngine);
+            logInfo("已为播放界面设置ImprovedAudioEngine连接");
             
             // 连接播放界面信号到主界面控制逻辑
-            connect(dialog, &PlayInterface::playPauseClicked, this, &MainWindowController::onPlayButtonClicked);
-            connect(dialog, &PlayInterface::nextClicked, this, &MainWindowController::onNextButtonClicked);
-            connect(dialog, &PlayInterface::previousClicked, this, &MainWindowController::onPreviousButtonClicked);
+            connect(dialog, &ImprovedPlayInterface::playPauseClicked, this, &MainWindowController::onPlayButtonClicked);
+            connect(dialog, &ImprovedPlayInterface::nextClicked, this, &MainWindowController::onNextButtonClicked);
+            connect(dialog, &ImprovedPlayInterface::previousClicked, this, &MainWindowController::onPreviousButtonClicked);
             logInfo("已连接播放界面控制信号到主界面");
         }
         

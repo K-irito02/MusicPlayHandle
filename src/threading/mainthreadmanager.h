@@ -187,10 +187,10 @@ private:
     QQueue<UIUpdateTask> m_batchQueue;
     
     // 线程安全
-    QMutex m_updateMutex;
-    QMutex m_delayedMutex;
-    QMutex m_batchMutex;
-    QMutex m_statisticsMutex;
+    mutable QMutex m_updateMutex;
+    mutable QMutex m_delayedMutex;
+    mutable QMutex m_batchMutex;
+    mutable QMutex m_statisticsMutex;
     
     // 定时器
     QTimer* m_updateTimer;

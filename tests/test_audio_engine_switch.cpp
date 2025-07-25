@@ -7,7 +7,7 @@
 #include <QLabel>
 #include <QSlider>
 #include "src/audio/audioengine.h"
-#include "src/ui/dialogs/PlayInterface.h"
+#include "src/ui/dialogs/improvedplayinterface.h"
 #include "src/models/song.h"
 
 /**

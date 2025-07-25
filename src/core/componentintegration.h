@@ -10,6 +10,7 @@
 #include <QApplication>
 #include <QMainWindow>
 #include <QDateTime>
+#include <QDebug>
 
 // 前向声明
 class AudioEngine;
@@ -32,6 +33,9 @@ enum class ComponentType {
     Unknown
 };
 
+// QDebug 运算符重载声明
+QDebug operator<<(QDebug debug, const ComponentType& type);
+
 // 组件状态枚举
 enum class ComponentStatus {
     NotInitialized,
@@ -40,6 +44,9 @@ enum class ComponentStatus {
     Error,
     Shutdown
 };
+
+// QDebug 运算符重载声明
+QDebug operator<<(QDebug debug, const ComponentStatus& status);
 
 // 组件信息结构
 struct ComponentInfo {
@@ -67,6 +74,9 @@ enum class IntegrationEventType {
     DatabaseChanged,
     UIUpdateRequired
 };
+
+// QDebug 运算符重载声明
+QDebug operator<<(QDebug debug, const IntegrationEventType& type);
 
 // 集成事件结构
 struct IntegrationEvent {
@@ -335,4 +345,4 @@ public:
     static void applyConfiguration(const QVariantMap& config);
 };
 
-#endif // COMPONENTINTEGRATION_H 
+#endif // COMPONENTINTEGRATION_H

@@ -60,7 +60,11 @@ bool FFmpegDecoder::initialize()
         
         connect(m_decodeTimer, &QTimer::timeout, this, &FFmpegDecoder::decodeLoop);
         connect(m_decodeThread, &QThread::started, [this]() {
-            m_decodeTimer->start(20); // 改为20ms间隔，50fps，平衡性能和响应性
+            // 初始解码间隔，后续将通过性能管理器动态调整
+    m_currentDecodeInterval = 20; // 默认20ms
+    m_decodeTimer->start(m_currentDecodeInterval);
+    
+    qDebug() << "FFmpegDecoder: 开始解码，初始间隔:" << m_currentDecodeInterval << "ms";
         });
         return true;
         

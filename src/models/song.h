@@ -24,6 +24,11 @@ public:
     Song();
     
     /**
+     * @brief 析构函数
+     */
+    ~Song() noexcept = default;
+    
+    /**
      * @brief 带参数构造函数
      * @param filePath 文件路径
      * @param title 歌曲标题

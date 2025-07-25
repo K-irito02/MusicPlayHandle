@@ -8,7 +8,7 @@
 #include "src/ui/controllers/AddSongDialogController.h"
 #include "src/ui/dialogs/CreateTagDialog.h"
 #include "src/ui/dialogs/ManageTagDialog.h"
-#include "src/ui/dialogs/PlayInterface.h"
+#include "src/ui/dialogs/improvedplayinterface.h"
 #include "src/ui/dialogs/SettingsDialog.h"
 #include <QSettings>
 #include <QApplication>
@@ -279,7 +279,11 @@ void MainWindow::onActionPlayInterface()
         }
         
         try {
-            PlayInterface* dialog = new PlayInterface(this);
+            ImprovedPlayInterface::InterfaceConfig config;
+            config.interfaceName = "MainWindowPlayInterface";
+            config.enablePerformanceMonitoring = true;
+            config.enableResourceLocking = true;
+            ImprovedPlayInterface* dialog = new ImprovedPlayInterface(this, config);
             dialog->setAttribute(Qt::WA_DeleteOnClose, true);
             dialog->show();
             refreshPlaybackStatus();
@@ -722,7 +726,11 @@ void MainWindow::showManageTagDialog() {
     dlg.exec();
 }
 void MainWindow::showPlayInterfaceDialog() {
-    PlayInterface* dlg = new PlayInterface(this);
+    ImprovedPlayInterface::InterfaceConfig config;
+    config.interfaceName = "MainWindowPlayInterface";
+    config.enablePerformanceMonitoring = true;
+    config.enableResourceLocking = true;
+    ImprovedPlayInterface* dlg = new ImprovedPlayInterface(this, config);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
 }

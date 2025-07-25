@@ -54,6 +54,12 @@ public:
     qint64 getDuration() const;
     qint64 getCurrentPosition() const;
     bool isEndOfFile() const;
+    
+    // 动态频率调整
+    void setDecodeInterval(int intervalMs);
+    int getDecodeInterval() const;
+    void enableAdaptiveDecoding(bool enabled);
+    bool isAdaptiveDecodingEnabled() const;
 
 signals:
     void audioDataReady(const QVector<double>& levels);
@@ -61,6 +67,7 @@ signals:
     void durationChanged(qint64 duration);
     void decodingFinished();
     void errorOccurred(const QString& error);
+    void decodeIntervalChanged(int newInterval);
 
 private slots:
     void decodeLoop();
@@ -84,6 +91,11 @@ private:
     QTimer* m_decodeTimer;
     QAtomicInt m_isDecoding;
     bool m_isEndOfFile;
+    
+    // 动态频率调整支持
+    QAtomicInt m_currentDecodeInterval;
+    QAtomicInt m_targetDecodeInterval;
+    bool m_adaptiveDecodingEnabled;
     
     // 音频数据
     QVector<double> m_currentLevels;

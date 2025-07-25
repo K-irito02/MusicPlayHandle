@@ -11,6 +11,8 @@
 #include <functional>
 #include <memory>
 #include "constants.h"
+#include "models/tag.h"
+#include "models/song.h"
 
 // 为了支持在信号中传递 QList<T>
 Q_DECLARE_METATYPE(QList<Tag>)
@@ -35,6 +37,7 @@ template<typename T>
 class LazyLoader : public LazyLoaderBase
 {
     // 移除 Q_OBJECT 宏，因为这是一个模板类
+    friend class DatabaseManager; // 允许 DatabaseManager 访问私有成员
 public:
     explicit LazyLoader(QObject* parent = nullptr) : LazyLoaderBase(parent), 
         m_loaded(false), m_loading(false) {}
@@ -168,6 +171,8 @@ protected:
      * @return 加载的数据列表
      */
     virtual QList<T> doLoadData() = 0;
+
+
     
     /**
      * @brief 同步加载数据
@@ -232,7 +237,7 @@ protected:
         watcher->setFuture(future);
     }
     
-private:
+protected:
     mutable QMutex m_mutex;
     QList<T> m_data;
     bool m_loaded;

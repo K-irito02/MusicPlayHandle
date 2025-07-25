@@ -72,7 +72,7 @@ public:
         m_cache[key] = CacheItem<V>(value);
         m_insertionOrder.append(key);
         
-        qDebug() << "Cache: Added item with key" << key << ", cache size:" << m_cache.size();
+        qDebug() << QString("Cache: Added item with key") << key << QString(", cache size:") << m_cache.size();
     }
     
     /**
@@ -122,7 +122,7 @@ public:
         
         if (m_cache.remove(key) > 0) {
             m_insertionOrder.removeOne(key);
-            qDebug() << "Cache: Removed item with key" << key;
+            qDebug() << QString("Cache: Removed item with key") << key;
             return true;
         }
         return false;
@@ -136,7 +136,7 @@ public:
         QMutexLocker locker(&m_mutex);
         m_cache.clear();
         m_insertionOrder.clear();
-        qDebug() << "Cache: Cleared all items";
+        qDebug() << QString("Cache: Cleared all items");
     }
     
     /**
@@ -227,7 +227,7 @@ public slots:
         }
         
         if (!toRemove.isEmpty()) {
-            qDebug() << "Cache: Cleaned up" << toRemove.size() << "expired items";
+            qDebug() << QString("Cache: Cleaned up") << toRemove.size() << QString("expired items");
         }
     }
     
@@ -257,7 +257,7 @@ private:
         m_cache.remove(lruKey);
         m_insertionOrder.removeOne(lruKey);
         
-        qDebug() << "Cache: Removed LRU item with key" << lruKey;
+        qDebug() << QString("Cache: Removed LRU item with key") << lruKey;
     }
     
 private:

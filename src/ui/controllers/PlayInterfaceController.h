@@ -7,7 +7,7 @@
 #include <QDebug>
 #include "../../audio/audiotypes.h"
 #include "../../models/song.h"
-#include "../dialogs/PlayInterface.h"
+#include "../dialogs/improvedplayinterface.h"
 
 class AudioEngine;
 class TagManager;
@@ -45,7 +45,7 @@ public:
     // 静态常量
     static const int UPDATE_INTERVAL;  // 更新间隔（毫秒）
 
-    explicit PlayInterfaceController(PlayInterface* interface, QObject* parent = nullptr);
+    explicit PlayInterfaceController(ImprovedPlayInterface* interface, QObject* parent = nullptr);
     ~PlayInterfaceController();
 
     void initialize();
@@ -123,7 +123,7 @@ private:
     QString formatTime(qint64 milliseconds) const;
 
     // 界面相关
-    PlayInterface* m_interface;
+    ImprovedPlayInterface* m_interface;
     bool m_isProgressBarDragging;  // 进度条是否正在拖动
     
     // 核心组件

@@ -7,8 +7,10 @@
 #include <QMutexLocker>
 #include <QTimer>
 #include <QElapsedTimer>
+#include <QDateTime>
 #include <QHash>
 #include <QDebug>
+#include <list>
 #include <memory>
 #include <functional>
 #include <type_traits>
@@ -17,12 +19,12 @@
  * @brief 对象池统计信息
  */
 struct ObjectPoolStats {
-    int totalCreated = 0;      // 总创建数量
-    int totalAcquired = 0;     // 总获取数量
-    int totalReleased = 0;     // 总释放数量
-    int currentPoolSize = 0;   // 当前池大小
-    int currentInUse = 0;      // 当前使用中数量
-    int maxPoolSize = 0;       // 最大池大小
+    size_t totalCreated = 0;      // 总创建数量
+    size_t totalAcquired = 0;     // 总获取数量
+    size_t totalReleased = 0;     // 总释放数量
+    size_t currentPoolSize = 0;   // 当前池大小
+    size_t currentInUse = 0;      // 当前使用中数量
+    size_t maxPoolSize = 0;       // 最大池大小
     int hitRate = 0;           // 命中率（百分比）
     qint64 avgAcquireTime = 0; // 平均获取时间（微秒）
     
@@ -31,8 +33,8 @@ struct ObjectPoolStats {
      */
     void calculateHitRate() {
         if (totalAcquired > 0) {
-            int hits = totalAcquired - totalCreated;
-            hitRate = (hits * 100) / totalAcquired;
+            size_t hits = totalAcquired - totalCreated;
+            hitRate = static_cast<int>((hits * 100) / totalAcquired);
         }
     }
 };
@@ -57,7 +59,7 @@ signals:
 template<typename T>
 class ObjectPool : public ObjectPoolBase
 {
-    static_assert(std::is_default_constructible<T>::value, "T must be default constructible");
+    // 移除static_assert，因为我们可以通过工厂函数创建对象
 
 public:
     using ObjectPtr = std::unique_ptr<T>;
@@ -71,17 +73,17 @@ public:
      * @param maxSize 最大池大小
      * @param initialSize 初始池大小
      */
-    explicit ObjectPool(QObject* parent = nullptr, int maxSize = 100, int initialSize = 10)
+    explicit ObjectPool(QObject* parent = nullptr, size_t maxSize = 100, size_t initialSize = 10)
         : ObjectPoolBase(parent)
         , m_maxSize(maxSize)
         , m_initialSize(initialSize)
         , m_cleanupTimer(new QTimer(this))
-        , m_factory([](){ return std::make_unique<T>(); })
+        , m_cleanupInterval(60000) // 1分钟
+        , m_maxIdleTime(300000)    // 5分钟
+        , m_factory(nullptr) // 工厂函数需要后续设置
         , m_resetFunc(nullptr)
         , m_validateFunc(nullptr)
         , m_enableStats(true)
-        , m_cleanupInterval(60000) // 1分钟
-        , m_maxIdleTime(300000)    // 5分钟
     {
         // 设置清理定时器
         m_cleanupTimer->setInterval(m_cleanupInterval);
@@ -141,8 +143,9 @@ public:
         ObjectPtr obj;
         
         // 尝试从池中获取
-        while (!m_pool.isEmpty()) {
-            auto poolItem = m_pool.dequeue();
+        while (!m_pool.empty()) {
+            auto poolItem = std::move(m_pool.front());
+            m_pool.pop_front();
             
             // 验证对象是否有效
             if (!m_validateFunc || m_validateFunc(poolItem.object.get())) {
@@ -215,7 +218,7 @@ public:
         item.object = std::move(obj);
         item.timestamp = QDateTime::currentMSecsSinceEpoch();
         
-        m_pool.enqueue(std::move(item));
+        m_pool.push_back(std::move(item));
         
         // 更新统计
         if (m_enableStats) {
@@ -231,7 +234,7 @@ public:
      * @brief 获取池大小
      * @return 当前池中对象数量
      */
-    int size() const {
+    size_t size() const {
         QMutexLocker locker(&m_mutex);
         return m_pool.size();
     }
@@ -251,7 +254,7 @@ public:
      */
     bool isEmpty() const {
         QMutexLocker locker(&m_mutex);
-        return m_pool.isEmpty();
+        return m_pool.empty();
     }
     
     /**
@@ -271,19 +274,19 @@ public:
      * @brief 预分配对象
      * @param count 预分配数量（默认使用初始大小）
      */
-    void preallocate(int count = -1) {
-        if (count < 0) {
+    void preallocate(size_t count = 0) {
+        if (count == 0) {
             count = m_initialSize;
         }
         
         QMutexLocker locker(&m_mutex);
         
-        for (int i = 0; i < count && m_pool.size() < m_maxSize; ++i) {
+        for (size_t i = 0; i < count && m_pool.size() < m_maxSize; ++i) {
             PoolItem item;
             item.object = m_factory();
             item.timestamp = QDateTime::currentMSecsSinceEpoch();
             
-            m_pool.enqueue(std::move(item));
+            m_pool.push_back(std::move(item));
             
             if (m_enableStats) {
                 m_stats.totalCreated++;
@@ -348,13 +351,13 @@ public:
      * @brief 设置最大池大小
      * @param maxSize 最大大小
      */
-    void setMaxSize(int maxSize) {
+    void setMaxSize(size_t maxSize) {
         QMutexLocker locker(&m_mutex);
         m_maxSize = maxSize;
         
         // 如果当前池大小超过新的最大值，清理多余对象
         while (m_pool.size() > m_maxSize) {
-            m_pool.dequeue();
+            m_pool.pop_front();
         }
         
         if (m_enableStats) {
@@ -363,7 +366,7 @@ public:
         }
     }
     
-protected:
+public:
     /**
      * @brief 清理过期对象
      */
@@ -374,10 +377,10 @@ protected:
         int cleanedCount = 0;
         
         // 清理过期对象
-        while (!m_pool.isEmpty()) {
-            const auto& front = m_pool.head();
+        while (!m_pool.empty()) {
+            const auto& front = m_pool.front();
             if (currentTime - front.timestamp > m_maxIdleTime) {
-                m_pool.dequeue();
+                m_pool.pop_front();
                 cleanedCount++;
             } else {
                 break; // 队列是按时间排序的，后面的对象更新
@@ -390,7 +393,7 @@ protected:
                 emit poolStatusChanged(m_stats.currentPoolSize, m_stats.currentInUse);
             }
             
-            qDebug() << "ObjectPool cleaned up" << cleanedCount << "expired objects";
+            qDebug() << QString("ObjectPool cleaned up") << cleanedCount << QString("expired objects");
             emit ObjectPoolBase::objectsCleaned(cleanedCount);
         }
     }
@@ -404,13 +407,20 @@ private:
     struct PoolItem {
         ObjectPtr object;
         qint64 timestamp; // 创建或最后使用时间
+        
+        // 禁用拷贝构造和赋值
+        PoolItem() = default;
+        PoolItem(PoolItem&&) = default;
+        PoolItem& operator=(PoolItem&&) = default;
+        PoolItem(const PoolItem&) = delete;
+        PoolItem& operator=(const PoolItem&) = delete;
     };
     
     mutable QMutex m_mutex;
-    QQueue<PoolItem> m_pool;
+    std::list<PoolItem> m_pool; // 使用std::list避免拷贝问题
     
-    int m_maxSize;
-    int m_initialSize;
+    size_t m_maxSize;
+    size_t m_initialSize;
     
     QTimer* m_cleanupTimer;
     int m_cleanupInterval;
@@ -505,6 +515,11 @@ public:
      * @brief 重置所有统计
      */
     void resetAllStatistics();
+    
+    /**
+     * @brief 设置默认对象池
+     */
+    void setupDefaultPools();
     
 public slots:
     /**

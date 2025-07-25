@@ -59,19 +59,19 @@ QHash<QString, ObjectPoolStats> ObjectPoolManager::getAllStatistics() const
     // 由于模板的限制，我们需要为每种类型单独处理
     
     // 示例：获取TagListItem池的统计
-    auto tagPool = getPool<TagListItem>("TagListItem");
+    auto tagPool = const_cast<ObjectPoolManager*>(this)->getPool<TagListItem>("TagListItem");
     if (tagPool) {
         stats["TagListItem"] = tagPool->getStatistics();
     }
     
     // 获取QString池的统计
-    auto stringPool = getPool<QString>("QString");
+    auto stringPool = const_cast<ObjectPoolManager*>(this)->getPool<QString>("QString");
     if (stringPool) {
         stats["QString"] = stringPool->getStatistics();
     }
     
     // 获取QByteArray池的统计
-    auto byteArrayPool = getPool<QByteArray>("QByteArray");
+    auto byteArrayPool = const_cast<ObjectPoolManager*>(this)->getPool<QByteArray>("QByteArray");
     if (byteArrayPool) {
         stats["QByteArray"] = byteArrayPool->getStatistics();
     }
@@ -163,7 +163,7 @@ void ObjectPoolManager::setupDefaultPools()
     
     // 设置TagListItem的工厂函数
     tagListItemPool->setFactory([]() {
-        return std::make_unique<TagListItem>();
+        return std::make_unique<TagListItem>("", "", true, true);
     });
     
     // 设置TagListItem的重置函数
@@ -171,7 +171,7 @@ void ObjectPoolManager::setupDefaultPools()
         if (item) {
             // 重置TagListItem的状态
             item->setTagName("");
-            item->setIconPath("");
+            item->setIcon("");
             item->setEditable(true);
             item->setDeletable(true);
             item->hide();

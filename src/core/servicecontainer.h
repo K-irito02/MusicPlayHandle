@@ -45,7 +45,7 @@ public:
         std::type_index typeIndex(typeid(T));
         auto it = m_services.find(typeIndex);
         if (it != m_services.end()) {
-            return std::static_pointer_cast<T>(it->second);
+            return std::static_pointer_cast<T>(it.value());
         }
         return nullptr;
     }

@@ -79,3 +79,20 @@ const DatabaseManager* BaseDao::dbManager() const
 {
     return m_dbManager;
 }
+
+void BaseDao::closeDatabase()
+{
+    if (m_dbManager) {
+        m_dbManager->close();
+    }
+}
+
+bool BaseDao::createTables()
+{
+    if (!m_dbManager || !m_dbManager->isInitialized()) {
+        logError("createTables", "数据库未初始化");
+        return false;
+    }
+    
+    return m_dbManager->createTables();
+}
